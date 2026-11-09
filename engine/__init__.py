@@ -1,4 +1,4 @@
-"""Outwold devourer — тоглоомын дүрмийн цөм (pygame-гүй).
+"""Outworld Devourer — тоглоомын дүрмийн цөм (pygame-гүй).
 
 Хэрэглээ:
     from engine import GameState, legal_actions, apply
