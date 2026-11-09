@@ -1,4 +1,4 @@
-"""python -m experiments — 100 тулаан, A/B, тэнцвэрийн хувилбар → CSV + Markdown тайлан."""
+"""python -m experiments — 100 тулаан, A/B, тэнцвэрийн хувилбар, таамаглагч → CSV + Markdown."""
 
 import argparse
 import json
@@ -19,7 +19,12 @@ def main(argv=None) -> int:
     p.add_argument("--mcts-iters", type=int, default=400,
                    help="mcts горимд шийдвэр бүрийн давталт (хугацааны оронд — давтагдахуйц)")
     p.add_argument("--train-games", type=int, default=5, help="профайл гаргах bot бүрийн тулаан")
-    p.add_argument("--skip", nargs="*", default=[], choices=("base", "ab", "balance"))
+    p.add_argument("--predictor-games", type=int, default=30,
+                   help="таамаглагчийн туршилтад bot бүрийн тулаан (70% сургалт / 30% тест)")
+    p.add_argument("--human-logs", default="logs",
+                   help="хүний тоглолтын log (leave-one-game-out); байхгүй бол алгасна")
+    p.add_argument("--skip", nargs="*", default=[],
+                   choices=("base", "ab", "balance", "predictor"))
     p.add_argument("--out", default="experiments/results")
     args = p.parse_args(argv)
     if hasattr(sys.stdout, "reconfigure"):
@@ -41,6 +46,7 @@ def main(argv=None) -> int:
 
     base = ab = balance = []
     profiles, applied = {}, {}
+    predictor = None
     if "base" not in args.skip:
         step(f"1. Үндсэн туршилт: {args.games} тулаан")
         base = run_games(args.games, make_boss, BOT_NAMES, seed0=0, experiment="base")
@@ -52,6 +58,20 @@ def main(argv=None) -> int:
     if "balance" not in args.skip:
         step(f"3. Тэнцвэр: {len(BALANCE_VARIANTS)} хувилбар × {args.games} тулаан")
         balance, applied = balance_sweep(args.games, make_boss, BALANCE_VARIANTS, BOT_NAMES)
+    if "predictor" not in args.skip:
+        from learning.predictor import MovePredictor, save_predictor
+
+        from .predictor_eval import bot_logs, human_eval, split_eval, timing
+        step(f"4. Таамаглагч: bot бүрт {args.predictor_games} тулааны log")
+        logs = bot_logs(make_boss, BOT_NAMES, games_per_bot=args.predictor_games)
+        rows_p = split_eval(logs)
+        human = human_eval(args.human_logs)
+        all_games = [g for games in logs.values() for g in games]
+        model = MovePredictor().fit(all_games)
+        save_predictor(model, out / "predictor.json")
+        predictor = {"rows": rows_p + ([human] if human else []),
+                     "timing": timing(all_games, model), "human_logs": args.human_logs,
+                     "games_per_bot": args.predictor_games}
     step("Тайлан бичиж байна")
 
     rows = base + ab + balance
@@ -61,7 +81,7 @@ def main(argv=None) -> int:
     meta = {"date": date.today().isoformat(), "boss": args.boss + (
         f" (max_iters={args.mcts_iters})" if args.boss == "mcts" else ""), "bots": BOT_NAMES,
         "train_games": args.train_games}
-    report = markdown_report(meta, base, ab, profiles, balance, applied)
+    report = markdown_report(meta, base, ab, profiles, balance, applied, predictor)
     (out / "REPORT.md").write_text(report, encoding="utf-8")
     step(f"Дууслаа: {out / 'REPORT.md'}, {out / 'games.csv'} ({len(rows)} тулаан)")
     return 0

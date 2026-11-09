@@ -103,12 +103,15 @@ def test_balance_sweep_and_report(tmp_path):
 def test_cli_with_placeholder(tmp_path):
     out = tmp_path / "res"
     code = subprocess.run([sys.executable, "-m", "experiments", "--games", "2", "--boss",
-                           "placeholder", "--train-games", "1", "--skip", "balance",
+                           "placeholder", "--train-games", "1", "--predictor-games", "3",
+                           "--human-logs", str(tmp_path / "no_logs"), "--skip", "balance",
                            "--out", str(out)], capture_output=True, encoding="utf-8",
                           errors="replace")
     assert code.returncode == 0, code.stderr
     assert (out / "REPORT.md").is_file() and (out / "games.csv").is_file()
-    assert (out / "profiles.json").is_file()
+    assert (out / "profiles.json").is_file() and (out / "predictor.json").is_file()
+    report = (out / "REPORT.md").read_text(encoding="utf-8")
+    assert "## 4. Дараагийн нүүдэл таамаглагч" in report and "2-оос цөөн тоглолттой" in report
 
 
 def test_experiments_do_not_import_pygame():

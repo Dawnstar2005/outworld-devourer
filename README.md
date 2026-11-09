@@ -151,9 +151,31 @@ python -m experiments --games 100 --boss eval     # ai/ шаардлагатай
    **ижил seed**-ээр 100 + 100 тулаанд харьцуулна. Ялгааны 95% интервал — paired bootstrap.
 3. **Тэнцвэр:** `engine/constants.py`-г өөрчлөхгүйгээр утгыг зөвхөн туршилтын процесст түр сольж
    (боссын HP ×0.8, ×0.7, баатруудын HP ×1.25, Хар дөл ×0.75, Тамын галын cooldown +1, ...) тус бүрт 100 тулаан.
+4. **Таамаглагч:** bot бүрийн 30 тулааны log-ийн 70%-иар сургаж, 30%-иар top-1/top-3 нарийвчлал; хүний
+   log (`--human-logs logs`) байвал leave-one-game-out; `predict()`-ийн хурд.
 
 Гаралт: `experiments/results/REPORT.md` (монгол тайлан, PM-ийн дүгнэлттэй), `games.csv` (тулаан бүр),
-`profiles.json`. Seed тогтмол тул дахин ажиллуулахад ижил дүн гарна.
+`profiles.json`, `predictor.json`. Seed тогтмол тул дахин ажиллуулахад ижил дүн гарна.
+
+### Дараагийн нүүдэл таамаглагч (`learning/predictor.py`)
+
+Тоглогчийн дүр бүрийн дараагийн нүүдлийг (ур чадвар, бай) гэсэн ангиар таамаглана — MCTS-ийн тоглогчийн
+загварт (`BossAI(predictor=...)`) ашиглана.
+
+```python
+from learning.predictor import MovePredictor, predictor_from_logs
+mp = predictor_from_logs("logs")                 # эсвэл MovePredictor().fit(games)
+mp.top_k(state, "healer", k=3)                   # [("heal", "mage"), ("shield", "knight"), (None, None)]
+mp(state, "healer", actions)                     # actions-тэй ижил урттай жин — MCTS дууддаг хэлбэр
+```
+
+```bash
+python -m learning.predictor logs                # → logs/predictor.json
+```
+
+Нөхцөлт logit загвар: анги бүрийн оноо = heuristic (шууд үр ашиг HP-ээр) + сурсан жингүүд (дүр × ур
+чадвар, байны төрөл, байны HP-ийн бүлэг). Өгөгдөл бага үед heuristic руу зөөлөн буцна. `predict()` дотор
+`next_state()` хэрэглэхгүй — нэг дуудлага ≈0.015 мс.
 
 ## `engine` API (GD, DQ-д зориулав)
 
