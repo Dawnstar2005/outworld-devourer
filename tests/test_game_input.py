@@ -450,9 +450,12 @@ def test_area_damage_targets_and_preview_use_engine():
     assert (3, 1) in sel.target_cells
     a = sel.action_for_target((3, 1))
     fx = sel.preview(a)
-    assert fx["demon_lord"]["hp"] == -25 and fx["imp1"]["hp"] == -25
-    assert "imp2" not in fx and not fx["imp1"].get("dies")
-    assert s.units["demon_lord"].hp == 400                 # жинхэнэ төлөв хөндөгдөөгүй
+    from engine import SKILLS
+    power = SKILLS["fireball"].power                       # тэнцвэрийн утгаас хамааралгүй
+    imp = s.units["imp1"]
+    assert fx["demon_lord"]["hp"] == -power and fx["imp1"]["hp"] == -min(power, imp.hp)
+    assert "imp2" not in fx and bool(fx["imp1"].get("dies")) == (power >= imp.hp)
+    assert s.units["demon_lord"].hp == s.units["demon_lord"].max_hp   # жинхэнэ төлөв хөндөгдөөгүй
     assert sel.preview(a) is fx                             # cache
 
 
@@ -553,16 +556,19 @@ def test_match_stats_counts_from_hook():
     place(s, knight=(2, 3))
     s.units["imp1"].hp = 15
     s.units["mage"].hp = 40
+    from engine import SKILLS
+    sword = SKILLS["sword"].power
+    healed = min(SKILLS["heal"].power, s.units["mage"].max_hp - 40)    # тэнцвэрийн утгаас хамааралгүй
     session.play(Action("knight", (2, 2), "sword", (2, 1), "imp1"))       # Imp 1-ийг ална
     session.play(Action("healer", s.units["healer"].pos, "heal", s.units["mage"].pos, "mage"))
-    assert stats.damage["knight"] == 20 and stats.kills["knight"] == 1   # engine-ийн amount (log-той ижил)
-    assert stats.deaths["imp1"] == 1 and stats.heal["healer"] == 30
+    assert stats.damage["knight"] == sword and stats.kills["knight"] == 1  # engine-ийн amount (log-той ижил)
+    assert stats.deaths["imp1"] == 1 and stats.heal["healer"] == healed
     assert stats.skills["knight"] == 1
     rows = stats.rows(s)
     assert [r["side"] for r in rows][:3] == [HEROES] * 3
     imp = next(r for r in rows if r["uid"] == "imp1")
     assert not imp["alive"] and imp["deaths"] == 1
-    assert stats.mvp(HEROES, s) == "healer"        # 30 эдгээлт > 20 хохирол
+    assert stats.mvp(HEROES, s) == ("healer" if healed > sword else "knight")
     assert stats.mvp(DEMONS, s) is None
     stats.reset()
     assert stats.damage["knight"] == 0 and stats.winner is None
