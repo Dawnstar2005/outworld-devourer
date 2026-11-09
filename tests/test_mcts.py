@@ -32,7 +32,7 @@ def test_finish_turn_hands_over():
 def test_mcts_decision_with_iterations():
     s = boss_turn_state()
     before = s.to_dict()
-    d = BossAI(seed=0, epsilon=0, max_iters=200).decide(s)
+    d = BossAI(seed=0, epsilon=0, max_iters=200, mode="mcts").decide(s)
     assert s.to_dict() == before
     assert d.mode == "mcts" and d.iterations == 200
     assert d.options[0].visits >= d.options[-1].visits
@@ -41,7 +41,7 @@ def test_mcts_decision_with_iterations():
 
 def test_mcts_respects_time_limit():
     s = boss_turn_state()
-    d = BossAI(seed=0, time_limit=0.3).decide(s)
+    d = BossAI(seed=0, time_limit=0.3, mode="mcts").decide(s)
     assert d.elapsed < 2.0
     assert d.iterations > 0
 
@@ -58,14 +58,14 @@ def test_predictor_is_used_for_heroes():
         calls.append(uid)
         return [1.0] * len(actions)
 
-    BossAI(seed=0, max_iters=30, predictor=predictor).decide(boss_turn_state())
+    BossAI(seed=0, max_iters=30, predictor=predictor, mode="mcts").decide(boss_turn_state())
     assert calls and set(calls) <= {"knight", "mage", "healer"}
 
 
 def test_full_game_with_mcts():
     rng = random.Random(1)
     s = GameState.new_game()
-    boss = BossAI(seed=1, max_iters=60)
+    boss = BossAI(seed=1, max_iters=60, mode="mcts")
     from ai.sparring import random_heroes_turn
     while not s.is_over:
         if s.side_to_act == HEROES:

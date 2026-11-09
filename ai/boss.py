@@ -22,7 +22,8 @@ from engine import (DEMONS, END_TURN, SKILLS, UNIT_TYPES, Action, GameState, app
                     area_cells, legal_actions, next_state, unit_actions)
 
 from .evaluate import DEFAULT_PRIORITY, evaluate
-from .mcts import MCTSPlanner
+from .mcts import MCTSPlanner, finish_turn
+from .opponent import GreedyHeroModel, PredictorHeroModel
 
 
 @dataclass
@@ -125,21 +126,27 @@ class BossAI:
         "habits": ["Healer-т их найддаг (эдгээлт 8/тулаан)", ...]   # самбарт
     profile=None бол суралцдаггүй босс (A/B туршилтын B бүлэг).
 
-    mode="mcts" (default) — шилдэг 5-ыг MCTS-ээр `lookahead` ээлж урагш шалгана.
-    mode="eval" — зөвхөн нөхцөл үнэлэх функц (11/25-ны шийдвэрийн цэгийн нөөц хувилбар).
+    mode="lookahead" (default) — шилдэг 5 төлөвлөгөө бүрийн дараа баатруудын бүтэн хариу
+        ээлжийг тоглогчийн загвараар (opponent.py) тоглуулж, үр дүнгээр нь сонгоно.
+        Туршилтаар хамгийн хүчтэй (docs/ai.md-ийг үз).
+    mode="mcts" — шилдэг 5-ыг MCTS-ээр `lookahead` ээлж урагш шалгана.
+    mode="eval" — зөвхөн нөхцөл үнэлэх функц (хамгийн хурдан).
     time_limit — MCTS-ийн хугацаа (сек). max_iters өгвөл хугацааны оронд давталтаар
     зогсоно (тест, туршилтыг давтагдахуйц болгоно).
     predictor — DQ-ийн дараагийн нүүдэл таамаглагч (mcts.py-ийн тайлбарыг үз).
     """
 
     def __init__(self, profile: dict | None = None, epsilon: float = 0.1, top_k: int = 5,
-                 seed: int | None = None, weights: dict | None = None, mode: str = "mcts",
+                 seed: int | None = None, weights: dict | None = None, mode: str = "lookahead",
                  time_limit: float = 1.0, max_iters: int | None = None, lookahead: int = 3,
-                 predictor=None):
+                 predictor=None, planner_kw: dict | None = None):
         self.mode = mode
         self.planner = MCTSPlanner(self.evaluate, random.Random(None if seed is None else seed + 1),
                                    lookahead=lookahead, time_limit=time_limit,
-                                   max_iters=max_iters, predictor=predictor)
+                                   max_iters=max_iters, predictor=predictor,
+                                   **(planner_kw or {}))
+        self.hero_model = (PredictorHeroModel(predictor) if predictor is not None
+                           else GreedyHeroModel())
         self.profile = profile or {}
         self.epsilon = epsilon
         self.top_k = top_k
@@ -193,6 +200,7 @@ class BossAI:
                 apply(end, x)
             finals.append((self.evaluate(end), seq, a))
         finals.sort(key=lambda t: t[0], reverse=True)
+        self._last_finals = list(finals)
         visits = [0] * len(finals)
 
         # 2б. MCTS: тоглогчийн хариу нүүдлийг тооцож 2–3 ээлж урагш шалгах
@@ -203,6 +211,18 @@ class BossAI:
             iterations = self.planner.iterations
             finals = [(mean, seq, first_of[id(seq)]) for seq, _, mean in res]
             visits = [v for _, v, _ in res]
+
+        # 2в. Lookahead: төлөвлөгөө бүрийн дараа тоглогчийн хариуг загвараар тоглуулах
+        if self.mode == "lookahead" and len(finals) > 1:
+            re_scored = []
+            for _, seq, a in finals:
+                after = finish_turn(state, seq)
+                if not after.is_over:
+                    after = self.hero_model.play_turn(after)
+                re_scored.append((self.evaluate(after), seq, a))
+            re_scored.sort(key=lambda t: t[0], reverse=True)
+            finals = re_scored
+            iterations = len(finals)
 
         # 3. Сонгох (10% санамсаргүй — шилдэг 5-аас)
         chosen_i = 0

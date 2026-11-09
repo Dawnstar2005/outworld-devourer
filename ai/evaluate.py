@@ -21,7 +21,7 @@ import math
 from engine import DEMONS, HEROES, GameState, dist
 
 # Баатар бүрийн аюулын түвшин (default). Профайл үүнийг өөрчилнө.
-DEFAULT_PRIORITY = {"knight": 1.0, "mage": 1.3, "healer": 1.4}
+DEFAULT_PRIORITY = {"knight": 1.0, "mage": 1.0, "healer": 1.0}  # туршилтаар хамгийн тогтвортой (docs/ai.md)
 
 DEFAULT_WEIGHTS = {
     "hero_damage": 3.0,   # баатруудад учруулсан хохирол (priority-гаар жинлэсэн, 0..1)

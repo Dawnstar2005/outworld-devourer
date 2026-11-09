@@ -15,7 +15,7 @@ POLICIES = {"random": random_heroes_turn, "greedy": greedy_heroes_turn}
 
 
 def run(games: int, heroes: str, seed: int = 0, epsilon: float = 0.1, verbose=False,
-        mode: str = "mcts", iters: int | None = 300, boss_hp: int | None = None):
+        mode: str = "lookahead", iters: int | None = 300, boss_hp: int | None = None):
     rng = random.Random(seed)
     hero_turn = POLICIES[heroes]
     wins = {HEROES: 0, DEMONS: 0, "draw": 0}
@@ -51,7 +51,7 @@ if __name__ == "__main__":
     p.add_argument("--heroes", choices=list(POLICIES), default="greedy")
     p.add_argument("--seed", type=int, default=0)
     p.add_argument("--epsilon", type=float, default=0.1)
-    p.add_argument("--mode", choices=["mcts", "eval"], default="mcts")
+    p.add_argument("--mode", choices=["lookahead", "mcts", "eval"], default="lookahead")
     p.add_argument("--iters", type=int, default=300, help="MCTS давталт (0 = хугацаагаар)")
     p.add_argument("--boss-hp", type=int, default=None)
     p.add_argument("-v", "--verbose", action="store_true")
