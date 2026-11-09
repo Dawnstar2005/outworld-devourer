@@ -75,13 +75,15 @@ class BoardView:
         surf.blit(ov, L.cell_rect(cell)[:2])
 
     # ---- зурах ----
-    def draw(self, surf, state, selection, anim, hover, interactive: bool):
+    def draw(self, surf, state, selection, anim, hover, interactive: bool, fx=None):
         surf.blit(self._board, (L.BOARD_X, L.BOARD_Y))
         self._draw_walls(surf, state.walls)
         for fl in anim.flashes:
             for cell in fl.cells:
                 self._fill(surf, cell, T.FLASH_COLORS[fl.kind] + (150,), fl.alpha)
 
+        if fx:
+            fx("under")                      # VFX: дүрийн доорх (газрын) эффект
         sel = selection.unit
         hover_action = selection.hover_action(hover) if interactive else None
         if sel is not None:
@@ -111,6 +113,8 @@ class BoardView:
         if sel is not None and interactive:
             action = hover_action or selection.armed_action()
             self._draw_preview(surf, state, selection, selection.preview(action))
+        if fx:
+            fx("over")                       # VFX: дүрийн дээрх сум, оч, тэсрэлт
         for f in anim.floats:
             size = 20 if f.kind == "skill" else 26
             label = self.text.render(f.text, size, T.FLOAT_COLORS[f.kind], bold=True).copy()

@@ -24,6 +24,8 @@ from engine import END_TURN, HEROES
 from . import layout as L
 from . import theme as T
 from .anim import Animator
+from .vfx import Vfx
+from .vfx_draw import VfxView
 from .board_view import BoardView
 from .boss_driver import BossDriver, PlaceholderBoss, ai_available, make_boss
 from .boss_panel import BossPanel
@@ -82,6 +84,8 @@ class App:
         self.boss = BossDriver(self._new_controller())
         self.boss_step_delay = boss_step_delay
         self.anim = Animator()
+        self.vfx = Vfx()
+        self.vfx_view = VfxView()
         self.log: deque = deque(maxlen=LOG_LINES)
 
         self.boss_phase = "idle"          # idle | thinking | acting
@@ -142,6 +146,7 @@ class App:
     def play(self, action) -> list:
         events = self.session.play(action)
         self.anim.push(events, self.state)
+        self.vfx.push(events, self.state)
         self.sound.play_events(events, self.session.human_side)
         for ev in events:
             if ev["type"] == "turn_start":   # ээлж солигдсон: боссын өмнөх ээлжийн төлөвийг цэвэрлэнэ
@@ -164,6 +169,7 @@ class App:
         self.stats.reset()
         self.selection.clear()
         self.anim.clear()
+        self.vfx.clear()
         self.log.clear()
         self.boss_phase = "idle"
         self.boss_queue.clear()
@@ -434,6 +440,7 @@ class App:
         if self.screen_name != "game" or self.paused:
             return
         self.anim.update(dt)
+        self.vfx.update(dt)
         self.update_boss(dt)
         if self.state.is_over and not self.anim.busy:
             self.over_timer += dt
@@ -467,7 +474,8 @@ class App:
     def _draw_game(self) -> None:
         interactive = not self.input_locked
         self.board.draw(self.screen, self.state, self.selection, self.anim,
-                        self.hover if interactive else None, interactive)
+                        self.hover if interactive else None, interactive,
+                        fx=lambda layer: self.vfx_view.draw(self.screen, self.vfx, layer))
         enabled = {"wait": interactive and self.selection.unit is not None,
                    "end_turn": interactive, "skills": interactive}
         hover_unit = self.state.unit_at(self.hover) if self.hover is not None else None
