@@ -20,6 +20,20 @@ def _demon_hp(state: GameState) -> float:
     return sum(u.hp for u in state.units.values() if u.side != HEROES and u.alive)
 
 
+def _threat(state: GameState, cell) -> tuple:
+    """Лавлах аюул: амьд босс, байхгүй бол `cell`-д хамгийн ойр дайсан (dungeon-ий мангасын үе)."""
+    boss = state.boss
+    if boss is not None and boss.alive:
+        return boss.pos
+    enemies = [u.pos for u in state.units.values() if u.side != HEROES and u.alive]
+    return min(enemies, key=lambda p: dist(p, cell)) if enemies else cell
+
+
+def _is_boss(state: GameState, uid) -> bool:
+    u = state.units.get(uid) if uid else None
+    return u is not None and u.type.boss
+
+
 class HeroBot:
     """Үндсэн bot: нүүдэл бүрийг `score()`-оор үнэлж хамгийн өндрийг сонгоно."""
 
@@ -65,7 +79,7 @@ class HealerReliantBot(HeroBot):
             if action.skill in ("heal", "shield"):
                 s += 25
             knight = state.units["knight"]
-            boss = state.boss.pos
+            boss = _threat(state, action.dest)
             if knight.alive and dist(action.dest, knight.pos) <= 2 and \
                     dist(action.dest, boss) > dist(knight.pos, boss):
                 s += 8
@@ -81,7 +95,7 @@ class MageReliantBot(HeroBot):
         if action.unit == "mage":
             if action.skill == "fireball":
                 s += 20
-            s += 2 * min(dist(action.dest, state.boss.pos), 5)
+            s += 2 * min(dist(action.dest, _threat(state, action.dest)), 5)
         return s
 
 
@@ -91,10 +105,10 @@ class AggressiveBot(HeroBot):
 
     def score(self, state, action):
         s = super().score(state, action)
-        if action.target_uid == "demon_lord":
+        if _is_boss(state, action.target_uid):
             s += 10
         if action.unit == "knight":
-            s += 6 - 2 * dist(action.dest, state.boss.pos)
+            s += 6 - 2 * dist(action.dest, _threat(state, action.dest))
         return s
 
 
@@ -106,7 +120,7 @@ class CautiousBot(HeroBot):
         s = super().score(state, action)
         if action.skill and SKILLS[action.skill].kind in ("shield", "wall", "taunt"):
             s += 12
-        s += 1.5 * min(dist(action.dest, state.boss.pos), 6)
+        s += 1.5 * min(dist(action.dest, _threat(state, action.dest)), 6)
         return s
 
 

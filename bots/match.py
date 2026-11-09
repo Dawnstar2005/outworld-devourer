@@ -55,7 +55,8 @@ def play_match(hero_bot, boss, logger=None, state: GameState | None = None,
     if logger is not None and logger.active:
         logger.close("max_actions")
     s = session.state
-    return MatchResult(winner=s.winner, rounds=s.round, boss_hp=s.boss.hp,
+    boss_hp = s.boss.hp if s.boss is not None else sum(u.hp for u in s.alive_units() if u.side != HEROES)
+    return MatchResult(winner=s.winner, rounds=s.round, boss_hp=boss_hp,
                        heroes_alive=len(s.alive_units(HEROES)),
                        seconds=time.perf_counter() - t0, actions=count[0],
                        log_path=str(logger.path) if logger is not None else None)

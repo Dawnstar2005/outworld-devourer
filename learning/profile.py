@@ -24,7 +24,7 @@ from collections import Counter
 from pathlib import Path
 from typing import Iterable, Optional
 
-from engine import HEROES, dist
+from engine import HEROES, UNIT_TYPES, dist
 
 from .log import iter_logs
 
@@ -44,6 +44,18 @@ FULL_CONFIDENCE_ACTIONS = 60  # ~2 тулаан: үүнээс олон хүни�
 MAX_GAMES = 20              # сүүлийн 20 тулаанаас суралцана
 MIN_HUMAN_ACTIONS = 5       # үүнээс цөөн нүүдэлтэй log-ийг алгасна
 MAX_HABITS = 4
+
+
+def _is_boss_kind(kind) -> bool:
+    t = UNIT_TYPES.get(kind)
+    return bool(t is not None and t.boss)
+
+
+def _boss_of(units: dict):
+    """Log-ийн төлөв дэх босс (dict) — Demon Lord эсвэл давхрын босс, байхгүй бол None."""
+    if "demon_lord" in units:
+        return units["demon_lord"]
+    return next((u for u in units.values() if _is_boss_kind(u.get("kind"))), None)
 
 
 def _new_stats() -> dict:
@@ -92,8 +104,8 @@ def _accumulate(st: dict, records: list, human_side: str) -> int:
             st["waits"][kind] += 1
         if act["skill"]:
             st["skills"][act["skill"]] += 1
-        boss = units["demon_lord"]
-        if boss["alive"]:
+        boss = _boss_of(units)          # dungeon-ий мангасын үед босс байхгүй — зайн шинжийг алгасна
+        if boss is not None and boss["alive"]:
             st["dist_sum"][kind] += dist(dest, (boss["x"], boss["y"]))
             st["dist_n"][kind] += 1
             if kind == "healer" and units["knight"]["alive"]:
@@ -107,7 +119,9 @@ def _accumulate(st: dict, records: list, human_side: str) -> int:
             src = units.get(ev.get("src"), {}).get("kind")
             if t == "damage" and src in HERO_KINDS:
                 st["damage"][src] += ev["amount"]
-                if ev["dst"] == "demon_lord":
+                if boss is None:
+                    pass                 # мангасын үе: «боссыг онилох уу, дагуулыг уу» гэх асуулт байхгүй
+                elif _is_boss_kind(units.get(ev["dst"], {}).get("kind")):
                     st["hit_boss"] += ev["amount"]
                 else:
                     st["hit_imps"] += ev["amount"]

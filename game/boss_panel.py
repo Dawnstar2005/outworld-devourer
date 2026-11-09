@@ -13,7 +13,7 @@ from . import theme as T
 
 X0 = L.BOSS_PANEL_X + 14
 INNER_W = L.BOSS_PANEL_W - 28
-MODE_NAMES = {"mcts": "MCTS", "eval": "Үнэлгээ"}
+MODE_NAMES = {"mcts": "MCTS", "eval": "Үнэлгээ", "tactic": "Тактик"}
 BOSS_RED = (225, 70, 80)
 
 

@@ -4,27 +4,86 @@ from __future__ import annotations
 
 from typing import Optional
 
-from engine import DEMONS, HEROES, SKILLS, UNIT_TYPES, GameState
+from engine import DEMONS, HEROES, ITEMS, SKILLS, UNIT_TYPES, GameState
 
-TURN_NAMES = {HEROES: "Баатруудын ээлж", DEMONS: "Боссын ээлж"}
-WINNER_NAMES = {HEROES: "Ялалт! Баатрууд яллаа", DEMONS: "Ялагдал. Босс яллаа", "draw": "Тэнцээ"}
+TURN_NAMES = {HEROES: "Баатруудын ээлж", DEMONS: "Дайсны ээлж"}
+WINNER_NAMES = {HEROES: "Ялалт! Баатрууд яллаа", DEMONS: "Ялагдал. Дайсан яллаа", "draw": "Тэнцээ"}
+
+
+def _split_uid(uid: str) -> tuple:
+    """"slime2" → ("slime", "2"), "demon_lord" → ("demon_lord", "")."""
+    base = uid.rstrip("0123456789")
+    return base, uid[len(base):]
 
 
 def unit_name(uid: str, state: Optional[GameState] = None) -> str:
-    """"imp1" → "Imp 1", "demon_lord" → "Demon Lord"."""
+    """"imp1" → "Imp 1", "slime2" → "Slime 2", "demon_lord" → "Demon Lord"."""
     u = state.units.get(uid) if state is not None else None
-    kind = u.kind if u is not None else ("imp" if uid.startswith("imp") else uid)
+    base, num = _split_uid(uid)
+    kind = u.kind if u is not None else base
     t = UNIT_TYPES.get(kind)
     if t is None:
         return uid
-    if kind == "imp" and uid[3:].isdigit():
-        return f"{t.name} {uid[3:]}"
-    return t.name
+    return f"{t.name} {num}" if num else t.name
 
 
 def skill_name(sid: str) -> str:
     sk = SKILLS.get(sid)
     return sk.name if sk else sid
+
+
+RARITY_NAMES = {"common": "энгийн", "rare": "ховор", "boss": "боссын олз"}
+
+
+def item_name(iid: str) -> str:
+    it = ITEMS.get(iid)
+    return it.name if it else iid
+
+
+def item_effect(iid: str) -> str:
+    """«+8 HP · +5% хүч · +1 нүүдэл» — item-ийн нөлөө товчоор."""
+    it = ITEMS.get(iid)
+    if it is None:
+        return ""
+    parts = []
+    if it.hp:
+        parts.append(f"+{it.hp} HP")
+    if it.power:
+        parts.append(f"+{round(it.power * 100)}% хүч")
+    if it.move:
+        parts.append(f"+{it.move} нүүдэл")
+    return " · ".join(parts)
+
+
+def power_text(power_mult: float) -> str:
+    """1.15 → «+15%» (хохирол / эдгээлтийн нэмэгдэл)."""
+    return f"+{round((power_mult - 1.0) * 100)}%"
+
+
+def action_label(action, state: GameState) -> str:
+    """Нүүдлийг монголоор: «Манан алхам → Цус сорох Mage-т», «Нялцгай цохилт (Knight + Mage)»."""
+    from engine import area_cells
+    if action.is_end_turn:
+        return "Ээлж дуусгах"
+    u = state.units[action.unit]
+    parts = []
+    if action.leap and u.type.leap:
+        parts.append(skill_name(u.type.leap) + " →")
+    if action.skill is None:
+        parts.append("Хүлээх" if action.dest == u.pos and not action.leap
+                     else f"Хөдлөх ({action.dest[0]},{action.dest[1]})")
+        return " ".join(parts)
+    sk = SKILLS[action.skill]
+    if action.target_uid:
+        parts.append(f"{sk.name} {unit_name(action.target_uid, state)}-т")
+    elif sk.kind == "area_damage" and action.target is not None:
+        cells = set(area_cells(action.target))
+        hit = [unit_name(e.uid, state) for e in state.alive_units()
+               if e.side != u.side and e.pos in cells]
+        parts.append(f"{sk.name} ({' + '.join(hit)})" if hit else sk.name)
+    else:
+        parts.append(sk.name)
+    return " ".join(parts)
 
 
 def event_text(ev: dict, state: Optional[GameState] = None) -> Optional[str]:

@@ -642,5 +642,6 @@ def test_every_skill_and_sound_has_a_file():
     folder = os.path.join(os.path.dirname(layout.__file__), "assets", "sounds")
     for name, file in SOUND_FILES.items():
         assert os.path.isfile(os.path.join(folder, file)), file
-    assert set(SKILL_SOUNDS) == set(SKILLS) - {"shadow_leap"}       # үсрэлт move event-ээр
+    leaps = {sid for sid, sk in SKILLS.items() if sk.kind == "leap"}  # үсрэлт move event-ээр
+    assert set(SKILL_SOUNDS) == set(SKILLS) - leaps
     assert set(SKILL_SOUNDS.values()) <= set(SOUND_FILES)
