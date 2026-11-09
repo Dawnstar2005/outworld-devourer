@@ -19,6 +19,7 @@ from . import layout as L
 from . import theme as T
 from .campaign import STAGE_KEYS, parse_key
 from .labels import RARITY_NAMES, item_effect, item_name, power_text, unit_name
+from .widgets import ButtonRenderer
 
 # Давхар бүрийн сэдвийн өнгө (зангилаа, хүрээ)
 FLOOR_COLORS = {"slime": (95, 205, 110), "goblin": (205, 160, 70), "vampire": (190, 50, 85),
@@ -47,9 +48,10 @@ def _mix(a, b, k: float) -> tuple:
 
 
 class DungeonView:
-    def __init__(self, text: T.Text, sprites=None):
+    def __init__(self, text: T.Text, sprites=None, buttons: ButtonRenderer = None):
         self.text = text
         self.sprites = sprites
+        self.buttons = buttons or ButtonRenderer(text)
         self._row_bg = {}          # (floor, w, h) → бүдэг tile-тай дэвсгэр
         self._enemy_info = {}      # key → [(kind, count, max_hp, power_mult)]
 
@@ -93,17 +95,10 @@ class DungeonView:
         if highlight:
             pygame.draw.rect(surf, T.ACCENT, r.inflate(4, 4), 2, border_radius=6)
 
-    def _button(self, surf, rect, label, enabled=True, hot=False, accent=False):
-        r = pygame.Rect(rect)
-        color = (T.BUTTON_HOVER if hot else T.BUTTON) if enabled else T.BUTTON_OFF
-        if accent and enabled:
-            color = (150, 60, 40) if not hot else (185, 80, 50)
-        pygame.draw.rect(surf, color, r, border_radius=8)
-        if hot and enabled:
-            pygame.draw.rect(surf, T.ACCENT, r, 2, border_radius=8)
-        size = 18 if r.h >= 40 else 15
-        self.text.draw(surf, label, r.center, size, T.TEXT if enabled else T.TEXT_DIM,
-                       anchor="center")
+    def _button(self, surf, rect, label, enabled=True, hot=False, accent=False, key=None):
+        size = 18 if rect[3] >= 40 else 14
+        self.buttons.draw(surf, rect, label, key=key or ("dv", tuple(rect)), hot=hot,
+                          enabled=enabled, style="primary" if accent else "normal", size=size)
 
     def enemy_info(self, key: str) -> list:
         """Үеийн дайснууд төрлөөр: [(kind, тоо, max_hp, power_mult)] — давхрын хүчийг тооцсон."""
@@ -499,4 +494,4 @@ class DungeonView:
         for k, (item, rect) in enumerate(zip(menu.items, menu.rects(w))):
             selected = k == menu.index and item.enabled
             self._button(surf, rect, item.label, enabled=item.enabled, hot=selected,
-                         accent=k == 0)
+                         accent=k == 0, key=(id(menu), k))

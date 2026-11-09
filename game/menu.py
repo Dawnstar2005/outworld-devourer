@@ -15,19 +15,23 @@ class MenuItem:
     key: str
     label: str
     enabled: bool = True
+    hint: str = ""             # сонгогдсон үед товчны доор харагдах тайлбар
+    primary: bool = False      # гол үйлдэл — галт өнгөтэй товч
 
 
 class Menu:
-    def __init__(self, items: list, top: int, width: int = 320, height: int = 50):
+    def __init__(self, items: list, top: int, width: int = 320, height: int = 50, gap: int = 12):
         self.items = items
         self.top = top
         self.width = width
         self.height = height
+        self.gap = gap
         self.index = 0
         self._skip_disabled(1)
 
     def rects(self, screen_w: int) -> list:
-        return L.menu_buttons(len(self.items), screen_w, self.top, self.width, self.height)
+        return L.menu_buttons(len(self.items), screen_w, self.top, self.width, self.height,
+                              self.gap)
 
     def item_at(self, pos, screen_w: int):
         """Хулганы байрлал дээрх идэвхтэй товчны индекс эсвэл None."""

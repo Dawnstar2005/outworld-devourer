@@ -1,4 +1,4 @@
-"""Эхлэлийн дүр зураг, цэс, удирдлагын тусламж, түр зогсолт, үр дүнгийн дэлгэц (pygame)."""
+"""Эхлэлийн дүр зураг, цэс, тохиргоо, удирдлагын тусламж, түр зогсолт, үр дүнгийн дэлгэц (pygame)."""
 
 import math
 
@@ -6,9 +6,12 @@ import pygame
 
 from engine import DEMONS, HEROES
 
+from . import __version__
 from . import layout as L
+from . import options as O
 from . import theme as T
 from .labels import WINNER_NAMES, unit_name
+from .widgets import GOLD, ButtonRenderer
 
 # Эхлэлийн дүр зураг: мөр бүр ээлжлэн тодорно, дараа нь гарчиг. Дурын товч — алгасах.
 INTRO_LINES = [
@@ -45,9 +48,10 @@ CONTROLS = [
 
 
 class Screens:
-    def __init__(self, text: T.Text, sprites=None):
+    def __init__(self, text: T.Text, sprites=None, buttons: ButtonRenderer = None):
         self.text = text
         self.sprites = sprites if sprites is not None and sprites.ok else None
+        self.buttons = buttons or ButtonRenderer(text)
         self._vignette = None
         self._glow = None
 
@@ -131,65 +135,142 @@ class Screens:
                        anchor="midright")
 
     # ---- нийтлэг ----
-    def _buttons(self, surf, menu, mouse_pos):
+    def _buttons(self, surf, menu, mouse_pos, size: int = 22):
         w = surf.get_width()
         for i, (item, rect) in enumerate(zip(menu.items, menu.rects(w))):
             selected = i == menu.index and item.enabled
-            color = T.BUTTON_HOVER if selected else (T.BUTTON if item.enabled else T.BUTTON_OFF)
-            pygame.draw.rect(surf, color, rect, border_radius=10)
-            if selected:
-                pygame.draw.rect(surf, T.ACCENT, rect, 2, border_radius=10)
-            r = pygame.Rect(rect)
-            self.text.draw(surf, item.label, r.center, 24, T.TEXT if item.enabled else T.TEXT_DIM,
-                           anchor="center")
+            self.buttons.draw(surf, rect, item.label, key=(id(menu), i), hot=selected,
+                              enabled=item.enabled, style="primary" if item.primary else "normal",
+                              size=size)
 
-    def _unit_row(self, surf, cx, y):
-        """Гарчгийн доорх чимэглэл: баатрууд эсрэг чөтгөрүүд."""
-        kinds = [("knight", "K"), ("mage", "M"), ("healer", "H"), None,
-                 ("imp", "i"), ("demon_lord", "D"), ("imp", "i")]
-        size, gap = 46, 10
+    def _unit_row(self, surf, cx, y, t: float = 0.0):
+        """Гарчгийн доорх чимэглэл: гурван баатар эсрэг Demon Lord ба Imp-үүд (зөөлөн хөвнө)."""
+        kinds = ["knight", "mage", "healer", None, "imp", "demon_lord", "imp"]
+        size, gap = 52, 12
         total = len(kinds) * size + (len(kinds) - 1) * gap
         x = cx - total // 2
-        for k in kinds:
-            if k is None:
-                self.text.draw(surf, "vs", (x + size // 2, y + size // 2), 26, T.TEXT_DIM,
-                               bold=True, anchor="center")
+        for i, kind in enumerate(kinds):
+            if kind is None:
+                pulse = 0.7 + 0.3 * math.sin(t * 2.0)
+                self.text.draw(surf, "vs", (x + size // 2, y + size // 2), 26,
+                               tuple(int(c * pulse) for c in GOLD), bold=True, anchor="center")
+                x += size + gap
+                continue
+            bob = int(3 * math.sin(t * 1.8 + i * 0.9))
+            center = (x + size // 2, y + size // 2 + bob)
+            ring = T.side_ring_color(kind)
+            shadow = pygame.Surface((size, 14), pygame.SRCALPHA)
+            pygame.draw.ellipse(shadow, (0, 0, 0, 110), shadow.get_rect())
+            surf.blit(shadow, (x, y + size - 8))
+            pygame.draw.ellipse(surf, ring, (x + 6, y + size - 10, size - 12, 10), 2)
+            sprite = None
+            if self.sprites is not None:
+                sprite = self.sprites.dungeon_unit(kind)
+            if sprite is not None:
+                big = size + (10 if kind == "demon_lord" else 0)
+                img = pygame.transform.scale(sprite, (big, big))
+                surf.blit(img, img.get_rect(center=(center[0], center[1] - (5 if big > size else 0))))
             else:
-                kind, letter = k
-                r = pygame.Rect(x, y, size, size)
-                sprite = self.sprites.unit(kind) if self.sprites else None
-                if sprite is not None:
-                    plate = pygame.Surface((size, size), pygame.SRCALPHA)
-                    pygame.draw.rect(plate, T.UNIT_COLORS[kind] + (95,), plate.get_rect(),
-                                     border_radius=8)
-                    pygame.draw.rect(plate, T.UNIT_COLORS[kind], plate.get_rect(), 2,
-                                     border_radius=8)
-                    surf.blit(plate, r)
-                    img = pygame.transform.scale(sprite, (size - 6, size - 6))
-                    surf.blit(img, img.get_rect(center=r.center))
-                else:
-                    pygame.draw.rect(surf, T.UNIT_COLORS[kind], r, border_radius=8)
-                    self.text.draw(surf, letter, r.center, 28, (255, 255, 255), bold=True,
-                                   anchor="center")
+                r = pygame.Rect(0, 0, size - 6, size - 6)
+                r.center = center
+                pygame.draw.rect(surf, T.unit_color(kind), r, border_radius=8)
+                self.text.draw(surf, T.unit_letter(kind), r.center, 28, (255, 255, 255),
+                               bold=True, anchor="center")
             x += size + gap
 
+    def _ornament(self, surf, cx, y, width, t: float = 0.0):
+        """Гарчгийн доорх алтан зураас, голдоо лугшдаг алмаз."""
+        for side in (-1, 1):
+            for i in range(width // 2):
+                a = 1.0 - i / (width / 2)
+                col = tuple(int(c * a) for c in (200, 150, 70))
+                surf.set_at((cx + side * (14 + i), y), col)
+        k = 0.75 + 0.25 * math.sin(t * 3.0)
+        d = 7
+        pygame.draw.polygon(surf, tuple(int(c * k) for c in GOLD),
+                            [(cx, y - d), (cx + d, y), (cx, y + d), (cx - d, y)])
+        pygame.draw.polygon(surf, (60, 30, 20), [(cx, y - 3), (cx + 3, y), (cx, y + 3), (cx - 3, y)])
+
     # ---- үндсэн цэс ----
-    def draw_menu(self, surf, menu, mouse_pos, note="", t: float = 0.0):
+    def draw_menu(self, surf, menu, mouse_pos, note="", t: float = 0.0, footer: str = ""):
         w, h = surf.get_size()
         surf.fill((14, 12, 18))
         self._draw_hell_glow(surf, t, strength=0.6)
         self._embers(surf, t, strength=0.6)
         self._draw_vignette(surf)
         cx = w // 2
-        self._glow_title(surf, "Outworld Devourer", (cx, 110), 76)
+        self._glow_title(surf, "Outworld Devourer", (cx, 92), 74)
+        self._ornament(surf, cx, 138, 420, t)
         self.text.draw(surf, "Тоглогчийн зуршлыг сурдаг AI босстой ээлжит тактик тоглоом",
-                       (cx, 162), 22, T.TEXT_DIM, anchor="center")
-        self._unit_row(surf, cx, 192)
+                       (cx, 158), 20, T.TEXT_DIM, anchor="center")
+        self._unit_row(surf, cx, 182, t)
         self._buttons(surf, menu, mouse_pos)
+        rects = menu.rects(w)
+        item = menu.items[menu.index] if menu.items else None
+        if item is not None and item.hint and rects:
+            self.text.draw(surf, item.hint, (cx, rects[-1][1] + rects[-1][3] + 16), 16, GOLD,
+                           anchor="center")
         if note:
-            self.text.draw(surf, note, (cx, h - 56), 17, T.TEXT_DIM, anchor="center")
-        self.text.draw(surf, "↑ ↓ / хулгана — сонгох · Enter — батлах", (cx, h - 30), 16,
+            self.text.draw(surf, note, (cx, h - 44), 14, T.TEXT_DIM, anchor="center")
+        self.text.draw(surf, "↑ ↓ / хулгана — сонгох · Enter — батлах", (cx, h - 20), 14,
                        T.TEXT_DIM, anchor="center")
+        self.text.draw(surf, f"v{__version__}", (16, h - 26), 14, (110, 100, 110))
+        if footer:
+            self.text.draw(surf, footer, (w - 16, h - 26), 14, T.TEXT_DIM, anchor="topright")
+
+    # ---- тохиргоо ----
+    def draw_options(self, surf, opts, mouse_pos, t: float = 0.0, dimmed_bg: bool = False):
+        """Тохиргооны дэлгэц: дууны түвшин, дайсны хурд, самбар, бүтэн дэлгэц."""
+        w, h = surf.get_size()
+        if dimmed_bg:
+            shade = pygame.Surface((w, h), pygame.SRCALPHA)
+            shade.fill((0, 0, 0, 200))
+            surf.blit(shade, (0, 0))
+        else:
+            surf.fill((14, 12, 18))
+            self._draw_hell_glow(surf, t, strength=0.35)
+            self._embers(surf, t, strength=0.35)
+            self._draw_vignette(surf)
+        cx = w // 2
+        self._glow_title(surf, "Тохиргоо", (cx, 64), 50)
+        self._ornament(surf, cx, 98, 300, t)
+        hit = opts.hit(mouse_pos, w) if mouse_pos is not None else None
+        for i, row in enumerate(O.ROWS):
+            rect = O.row_rect(i, w)
+            selected = i == opts.index
+            hot_row = selected or (hit is not None and hit[1] == i)
+            if row.kind == "button":
+                self.buttons.draw(surf, rect, row.label, key=("opt", i), hot=selected,
+                                  style="primary" if row.key == "back" else "normal", size=20)
+                continue
+            r = pygame.Rect(rect)
+            panel = pygame.Surface(r.size, pygame.SRCALPHA)
+            pygame.draw.rect(panel, (40, 34, 52, 235) if selected else (28, 25, 36, 210),
+                             panel.get_rect(), border_radius=10)
+            surf.blit(panel, r)
+            if selected:
+                pygame.draw.rect(surf, (150, 110, 60), r, 1, border_radius=10)
+                pygame.draw.rect(surf, GOLD, (r.x, r.y + 8, 4, r.h - 16), border_radius=2)
+            self.text.draw(surf, row.label, (r.x + 22, r.centery), 19,
+                           T.TEXT if selected else (200, 196, 210), anchor="midleft")
+            ctrl = pygame.Rect(O.control_rect(i, w))
+            value = opts.value(row)
+            if row.kind == "slider":
+                self.buttons.slider(surf, O.slider_bar(i, w), value, hot_row, key=("sl", i))
+                self.text.draw(surf, opts.value_text(row), (ctrl.right, ctrl.centery), 17,
+                               GOLD if selected else T.TEXT, anchor="midright")
+            elif row.kind == "choice":
+                self.buttons.choice(surf, (ctrl.x, ctrl.y, O.SLIDER_W, ctrl.h),
+                                    opts.value_text(row), hot_row, key=("ch", i))
+            else:
+                pill = (ctrl.x, ctrl.centery - 13, 56, 26)
+                self.buttons.toggle(surf, pill, bool(value), hot_row, key=("tg", i))
+                self.text.draw(surf, opts.value_text(row), (ctrl.x + 70, ctrl.centery), 17,
+                               GOLD if value else T.TEXT_DIM, anchor="midleft")
+        if opts.row.hint:
+            self.text.draw(surf, opts.row.hint, (cx, O.hint_y()), 16, GOLD, anchor="center")
+        self.text.draw(surf, "↑ ↓ — сонгох · ← → — өөрчлөх · Enter — батлах · Esc — буцах",
+                       (cx, h - 26), 15, T.TEXT_DIM, anchor="center")
 
     # ---- удирдлага ----
     def draw_help(self, surf):
@@ -214,7 +295,7 @@ class Screens:
     def draw_pause(self, surf, menu, mouse_pos):
         w, h = surf.get_size()
         shade = pygame.Surface((w, h), pygame.SRCALPHA)
-        shade.fill((0, 0, 0, 170))
+        shade.fill((6, 4, 10, 215))
         surf.blit(shade, (0, 0))
         self.text.draw(surf, "Түр зогсолт", (w // 2, menu.top - 60), 48, T.ACCENT, bold=True,
                        anchor="center")
@@ -244,8 +325,8 @@ class Screens:
             self.text.draw(surf, title, (card.x + 24 + dx, y), 18, T.TEXT_DIM, bold=True)
         y += 30
         for row in stats.rows(state):
-            name_color = T.UNIT_COLORS["knight"] if row["side"] == HEROES else T.UNIT_COLORS["demon_lord"]
-            pygame.draw.rect(surf, T.UNIT_COLORS[state.units[row["uid"]].kind],
+            name_color = T.unit_color("knight") if row["side"] == HEROES else T.unit_color("demon_lord")
+            pygame.draw.rect(surf, T.unit_color(state.units[row["uid"]].kind),
                              (card.x + 24, y + 4, 14, 14), border_radius=3)
             self.text.draw(surf, unit_name(row["uid"], state), (card.x + 46, y), 20, T.TEXT)
             values = [row["damage"], row["heal"], row["kills"]]

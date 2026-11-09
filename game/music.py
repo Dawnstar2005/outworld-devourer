@@ -14,6 +14,7 @@ from typing import Optional
 MUSIC_TRACKS = {"intro": "intro.mp3", "title": "title.mp3", "battle": "battle.mp3",
                 "result": "result.ogg"}
 MUSIC_VOLUME = 0.45
+DEFAULT_MUSIC_GAIN = 0.56     # тохиргооны анхны утга (ерөнхий 80% × хөгжим 70%) → MUSIC_VOLUME
 FADE_OUT = 0.8          # сек
 FADE_IN_MS = 1500
 
@@ -24,6 +25,7 @@ class MusicPlayer:
         self.muted = False
         self.current: Optional[str] = None   # одоо тоглож буй (эсвэл файлгүй тул чимээгүй) зам
         self.target: Optional[str] = None    # тоглох ёстой зам
+        self.gain = DEFAULT_MUSIC_GAIN
         self._fade = 0.0
         self._mixer = None
         if not enabled:
@@ -48,7 +50,15 @@ class MusicPlayer:
         self.target = track
 
     def _volume(self) -> float:
-        return 0.0 if self.muted else MUSIC_VOLUME
+        if self.muted:
+            return 0.0
+        return min(1.0, MUSIC_VOLUME * self.gain / DEFAULT_MUSIC_GAIN)
+
+    def set_gain(self, gain: float) -> None:
+        """Тохиргооны «ерөнхий × хөгжим» түвшин (0–1), шууд хэрэгжинэ."""
+        self.gain = max(0.0, min(1.0, gain))
+        if self.ok and self._fade == 0.0:
+            self._mixer.music.set_volume(self._volume())
 
     def set_muted(self, muted: bool) -> None:
         self.muted = muted
