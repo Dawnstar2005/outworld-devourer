@@ -81,3 +81,32 @@ s.is_over, s.winner               # winner: "heroes" | "demons" | "draw" | None
 - `s.boss_enraged` — HP < 30%. Уур хилэнгийн зан төлөвийг AI шийднэ.
 
 PDF-д тодорхойгүй байсан утгыг (`constants.py`-д `TBD (GDD)` гэж тэмдэглэсэн) GDD батлагдахад засна.
+
+## `ai` API (GD-д: тоглоомд нэгтгэх)
+
+```python
+from ai import BossAI
+
+boss = BossAI(profile=None)              # profile: DQ-ийн зуршлын профайл (dict), None = суралцдаггүй
+# боссын ээлж ирэхэд:
+decision, events = boss.play_turn(state) # state-ийг шууд өөрчилнө, events-ээр анимаци хийнэ
+panel = decision.to_panel()              # «Боссын бодол» самбар
+```
+
+`panel` жишээ:
+```python
+{"habits": ["Healer-т их найддаг (эдгээлт 8/тулаан)"],
+ "options": [{"label": "Сүүдрийн үсрэлт → Хар дөл Mage-т", "score": 0.57, "chosen": True},
+             {"label": "Сүүдрийн үсрэлт → Тамын гал (Mage)", "score": 0.54, "chosen": False},
+             {"label": "Хар дөл Mage-т", "score": 0.53, "chosen": False}],
+ "enraged": False, "random_pick": False, "ms": 7}
+```
+Хурдан хэмжих: `python -m ai.bench --games 20 --heroes greedy -v`.
+
+### Профайлын формат (DQ → AI)
+```json
+{"target_priority": {"knight": 1.0, "mage": 1.2, "healer": 1.8},
+ "habits": ["Healer-т их найддаг (эдгээлт 8/тулаан)", "Healer Knight-ийн ард нуугддаг"]}
+```
+`target_priority` — баатар бүрийн аюулын түвшин (default 1.0 / 1.3 / 1.4). Өндөр бол босс түүнийг түрүүлж онилно.
+`habits` — самбарт харуулах мөрүүд. Таамаглагчийн гаралтын форматыг MCTS-ийн үед (11/25) нэмнэ.
