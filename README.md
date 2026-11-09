@@ -108,6 +108,38 @@ for path, records in iter_logs("logs", finished_only=True):
     assert replay_check(records)      # log-ийг engine-ээр дахин тоглуулж яг таарч байгааг шалгана
 ```
 
+### Зуршлын профайл (`learning/profile.py`)
+
+Сүүлийн 20 тулааны log-оос `BossAI(profile=...)`-д өгөх профайл гаргана:
+
+```bash
+python -m learning.profile logs          # → logs/profile.json, дэлгэцэнд target_priority, habits
+```
+
+- `target_priority` — тоглогч аль баатраас хамгийн их хамаардгийг (өгсөн хохирол + эдгээлт + бамбайгаар
+  **бодитоор шингээсэн** хохирол + taunt) хувиар тооцож, default аюулын түвшинг (Knight 1.0, Mage 1.3,
+  Healer 1.4) хамгийн ихдээ 0.7–1.6 дахин өөрчилнө. Өгөгдөл бага (≈60 нүүдлээс цөөн) үед default-оос бага холдоно.
+- `habits` (самбарт, хамгийн ихдээ 4): «Healer-т их найддаг», «Healer Knight-ийн ард нуугддаг»,
+  «Knight урд талд түрж тоглодог», «Mage алсаас довтолдог», «Боссыг шууд онилдог», «Imp-үүдийг түрүүлж
+  устгадаг», «Taunt-ийг байнга ашигладаг», «Мөсөн ханаар хамгаалдаг», «Ихэнхдээ байрандаа хүлээдэг»,
+  «Ээлжээ эрт дуусгадаг».
+
+Тоглоом шинэ тоглолт бүрийн өмнө профайлыг log-оос шинээр гаргаж боссод өгнө (`--profile auto`, default).
+`--profile none` — суралцдаггүй босс (A/B туршилтын B бүлэг), `--profile path.json` — тогтмол профайл.
+Log-ийн `meta.learned` нь тухайн тулаанд босс профайлтай байсан эсэхийг тэмдэглэнэ.
+
+## Bot тоглогчид (`bots/`)
+
+Өөр өөр зуршилтай тоглогчийг дуурайдаг скриптэй bot-ууд (профайл, 100 тулааны туршилтад):
+`random`, `greedy`, `healer_reliant`, `mage_reliant`, `aggressive`, `cautious`.
+
+```python
+from bots import HERO_BOTS, play_match
+from game.boss_driver import PlaceholderBoss      # эсвэл ai.BossAI(...)
+r = play_match(HERO_BOTS["cautious"](seed=1), PlaceholderBoss(seed=1), logger=None)
+r.winner, r.rounds, r.boss_hp
+```
+
 ## `engine` API (GD, DQ-д зориулав)
 
 ```python

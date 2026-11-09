@@ -123,7 +123,7 @@ def test_app_writes_one_log_per_game(monkeypatch, tmp_path):
     logs = list(iter_logs(tmp_path))
     assert len(logs) == 2
     (p1, r1), (p2, r2) = logs
-    assert r1[0]["meta"] == {"boss": "placeholder"}
+    assert r1[0]["meta"] == {"boss": "placeholder", "learned": False}
     assert [r["type"] for r in r1] == ["start", "action", "end"] and r1[-1]["reason"] == "restart"
     assert r2[-1]["reason"] == "menu"
     pygame.quit()
@@ -144,6 +144,6 @@ def test_skip_menu_start_writes_boss_meta(monkeypatch, tmp_path):
     from game.app import App
     logger = GameLogger(tmp_path)
     app = App(boss=PlaceholderBoss(seed=0), logger=logger, sound=False, start_screen="game")
-    assert logger.active and read_log(logger.path)[0]["meta"] == {"boss": "placeholder"}
+    assert logger.active and read_log(logger.path)[0]["meta"] == {"boss": "placeholder", "learned": False}
     app.go_menu()
     pygame.quit()

@@ -12,6 +12,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 from collections import deque
 from typing import Callable, Optional
@@ -106,7 +107,7 @@ class App:
         self.result_menu = Menu([MenuItem("again", "Дахин тоглох"),
                                  MenuItem("menu", "Үндсэн цэс")], top=410)
         if logger is not None and start_screen == "game":   # --skip-menu: эхний тоглолтын log
-            logger.start(self.state, meta={"boss": self._boss_label()})
+            logger.start(self.state, meta=self._log_meta())
 
     # ------------------------------------------------------------------ босс үүсгэх
     def _new_controller(self):
@@ -159,7 +160,7 @@ class App:
             self.boss = BossDriver(self._new_controller())
         self.session.reset()
         if self.logger is not None:
-            self.logger.start(self.state, meta={"boss": self._boss_label()})
+            self.logger.start(self.state, meta=self._log_meta())
         self.stats.reset()
         self.selection.clear()
         self.anim.clear()
@@ -173,6 +174,11 @@ class App:
         self.screen_name = "game"
 
     restart = start_game
+
+    def _log_meta(self) -> dict:
+        """Log-ийн meta: аль босс, суралцсан (профайлтай) эсэх — A/B туршилтад ялгана."""
+        return {"boss": self._boss_label(),
+                "learned": bool(getattr(self.boss.controller, "profile", None))}
 
     def _boss_label(self) -> str:
         c = self.boss.controller
@@ -492,6 +498,27 @@ class App:
         pygame.quit()
 
 
+def current_profile(args):
+    """Шинэ тоглолтын өмнө боссын профайл: log-оос шинээр гаргана (auto), файлаас, эсвэл None.
+
+    auto үед гарсан профайлыг <log-dir>/profile.json-д хадгална (тайлан, шалгалтад).
+    Тоглолтын log байхгүй бол None — суралцаагүй босс.
+    """
+    if args.profile == "none":
+        return None
+    from learning.profile import load_profile, profile_from_logs, save_profile
+    if args.profile != "auto":
+        return load_profile(args.profile)
+    prof = profile_from_logs(args.log_dir)
+    if not prof["stats"]["games"]:
+        return None
+    try:
+        save_profile(prof, os.path.join(args.log_dir, "profile.json"))
+    except OSError:
+        pass
+    return prof
+
+
 def main(argv=None) -> int:
     p = argparse.ArgumentParser(prog="python -m game", description="Outwold devourer")
     p.add_argument("--fps", type=int, default=FPS)
@@ -504,6 +531,8 @@ def main(argv=None) -> int:
     p.add_argument("--skip-menu", action="store_true", help="цэсгүйгээр шууд тоглоом эхлүүлэх")
     p.add_argument("--log-dir", default="logs", help="тоглолтын log хадгалах хавтас")
     p.add_argument("--no-log", action="store_true", help="тоглолтын log бичихгүй")
+    p.add_argument("--profile", default="auto",
+                   help="зуршлын профайл: auto (log-оос, тоглолт бүрийн өмнө), none, эсвэл JSON зам")
     p.add_argument("--frames", type=int, default=None, help=argparse.SUPPRESS)
     args = p.parse_args(argv)
 
@@ -513,7 +542,8 @@ def main(argv=None) -> int:
         from learning import GameLogger
         logger = GameLogger(args.log_dir, human_side=HEROES)
     app = App(GameSession(human_side=HEROES), boss=boss, fps=args.fps, logger=logger,
-              boss_factory=lambda mode: make_boss(mode=mode, seed=args.seed),
+              boss_factory=lambda mode: make_boss(mode=mode, seed=args.seed,
+                                                  profile=current_profile(args)),
               boss_mode=args.boss_mode,
               start_screen="game" if args.skip_menu else ("menu" if args.skip_intro else "intro"))
     app.run(max_frames=args.frames)
