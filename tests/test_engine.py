@@ -4,8 +4,15 @@ import time
 
 import pytest
 
-from engine import (DEMONS, END_TURN, HEROES, SKILLS, Action, GameState, apply,
+from engine import (DEMONS, END_TURN, HEROES, SKILLS, UNIT_TYPES, Action, GameState, apply,
                     is_legal, legal_actions, next_state, reachable)
+from engine.constants import ENRAGE_THRESHOLD
+
+# Тэнцвэрийн утгыг constants.py-аас уншина — утга өөрчлөгдөхөд тест эвдрэхгүй.
+BOSS_HP = UNIT_TYPES["demon_lord"].hp
+KNIGHT_HP = UNIT_TYPES["knight"].hp
+MAGE_HP = UNIT_TYPES["mage"].hp
+IMP_HP = UNIT_TYPES["imp"].hp
 
 
 def place(s, **pos):
@@ -29,7 +36,7 @@ def test_new_game():
     s = GameState.new_game()
     assert s.side_to_act == HEROES and s.round == 1 and s.winner is None
     assert len(s.alive_units(HEROES)) == 3 and len(s.alive_units(DEMONS)) == 3
-    assert s.boss.hp == 400
+    assert s.boss.hp == BOSS_HP
 
 
 def test_heroes_only_on_hero_turn():
@@ -61,7 +68,7 @@ def test_sword_damage_and_shield():
     a = Action("knight", (4, 2), "sword", (4, 1), "demon_lord")
     assert is_legal(s, a)
     apply(s, a)
-    assert s.boss.hp == 380
+    assert s.boss.hp == BOSS_HP - SKILLS["sword"].power
 
 
 def test_shield_absorbs():
@@ -71,15 +78,17 @@ def test_shield_absorbs():
     place(s, demon_lord=(3, 3))
     apply(s, Action("demon_lord", (3, 3), "dark_flame", (3, 6), "knight"))
     k = s.units["knight"]
-    assert k.shield == 0 and k.hp == 110  # 30 - 20 шингээсэн
+    assert k.shield == 0 and k.hp == KNIGHT_HP - (SKILLS["dark_flame"].power - 20)  # 20 шингээсэн
 
 
 def test_fireball_area_hits_only_enemies():
     s = GameState.new_game()
     place(s, mage=(4, 4))
     apply(s, Action("mage", (4, 4), "fireball", (3, 1)))  # 3×3: (2..4, 0..2)
-    assert s.boss.hp == 375 and s.units["imp1"].hp == 5 and s.units["imp2"].hp == 30
-    assert s.units["knight"].hp == 120
+    fb = SKILLS["fireball"].power
+    assert s.boss.hp == BOSS_HP - fb and s.units["imp1"].hp == max(0, IMP_HP - fb)
+    assert s.units["imp2"].hp == IMP_HP
+    assert s.units["knight"].hp == KNIGHT_HP
 
 
 def test_area_targets_only_useful_cells():
@@ -93,10 +102,10 @@ def test_area_targets_only_useful_cells():
 
 def test_heal_capped_and_curse_blocks():
     s2 = GameState.new_game()
-    s2.units["mage"].hp = 60
+    s2.units["mage"].hp = MAGE_HP - 10
     place(s2, healer=(3, 7))
     apply(s2, Action("healer", (3, 7), "heal", (2, 7), "mage"))
-    assert s2.units["mage"].hp == 70  # дээд HP-гаас хэтрэхгүй
+    assert s2.units["mage"].hp == MAGE_HP  # дээд HP-гаас хэтрэхгүй
 
     s3 = GameState.new_game()
     s3.units["mage"].hp = 30
@@ -218,9 +227,10 @@ def test_turn_switches_after_all_units_act():
 
 def test_enrage_flag():
     s = GameState.new_game()
-    s.boss.hp = 119
+    edge = int(BOSS_HP * ENRAGE_THRESHOLD)          # HP < 30% бол уур хилэн
+    s.boss.hp = edge - 1
     assert s.boss_enraged
-    s.boss.hp = 120
+    s.boss.hp = edge if edge >= BOSS_HP * ENRAGE_THRESHOLD else edge + 1
     assert not s.boss_enraged
 
 
@@ -238,7 +248,7 @@ def test_clone_is_independent():
     c.units["knight"].hp = 1
     c.units["knight"].cooldowns["sword"] = 5
     c.walls[(0, 0)] = 1
-    assert s.units["knight"].hp == 120 and s.units["knight"].cooldowns["sword"] == 0
+    assert s.units["knight"].hp == KNIGHT_HP and s.units["knight"].cooldowns["sword"] == 0
     assert not s.walls
 
 

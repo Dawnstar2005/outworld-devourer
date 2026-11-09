@@ -5,6 +5,10 @@
 
 "TBD (GDD)" гэсэн утгууд PDF-д байхгүй тул AI Engineer түр тавьсан. PM GDD-д
 (11/12) батлах хүртэл түр утга гэж үзнэ.
+
+Тэнцвэр (2026-11-09, PM баталсан): PDF-ийн анхны утгаар баатрууд BossAI-ийн эсрэг 100 тулаанаас
+0-ийг ялсан. 100 тулааны туршилтын (experiments/results/REPORT.md) дүнгээр боссын HP ×0.6,
+Хар дөл ×0.75, баатруудын HP ×1.25 болгосон — bot-ууд ~51% ялна. «PDF: x» гэж анхны утгыг үлдээв.
 """
 
 from dataclasses import dataclass
@@ -42,7 +46,7 @@ SKILLS = {
     "heal":       Skill("heal", "Эдгээх", "heal", range=3, power=35, cooldown=2),            # range, cd: TBD
     "shield":     Skill("shield", "Бамбай", "shield", range=3, power=20, cooldown=3),        # range, cd: TBD
     # Demon Lord
-    "dark_flame": Skill("dark_flame", "Хар дөл", "damage", range=4, power=30, cooldown=1),
+    "dark_flame": Skill("dark_flame", "Хар дөл", "damage", range=4, power=22, cooldown=1),  # PDF: 30
     "hellfire":   Skill("hellfire", "Тамын гал", "area_damage", range=4, power=20, cooldown=3),
     "curse":      Skill("curse", "Хараал", "curse", range=4, duration=2, cooldown=3),
     "shadow_leap": Skill("shadow_leap", "Сүүдрийн үсрэлт", "leap", range=6, cooldown=4),
@@ -64,10 +68,10 @@ class UnitType:
 
 
 UNIT_TYPES = {
-    "knight": UnitType("knight", "Knight", HEROES, hp=120, move=3, skills=("sword", "taunt")),
-    "mage": UnitType("mage", "Mage", HEROES, hp=70, move=3, skills=("fireball", "ice_wall")),
-    "healer": UnitType("healer", "Healer", HEROES, hp=80, move=3, skills=("heal", "shield")),
-    "demon_lord": UnitType("demon_lord", "Demon Lord", DEMONS, hp=400, move=2,
+    "knight": UnitType("knight", "Knight", HEROES, hp=150, move=3, skills=("sword", "taunt")),  # PDF: 120
+    "mage": UnitType("mage", "Mage", HEROES, hp=88, move=3, skills=("fireball", "ice_wall")),    # PDF: 70
+    "healer": UnitType("healer", "Healer", HEROES, hp=100, move=3, skills=("heal", "shield")),   # PDF: 80
+    "demon_lord": UnitType("demon_lord", "Demon Lord", DEMONS, hp=240, move=2,                  # PDF: 400
                            skills=("dark_flame", "hellfire", "curse", "summon_imp"),
                            leap="shadow_leap"),
     "imp": UnitType("imp", "Imp", DEMONS, hp=30, move=4, skills=("claw",)),
