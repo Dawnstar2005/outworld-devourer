@@ -44,11 +44,14 @@ from .input import Selection
 from .labels import event_text
 from .menu import Menu, MenuItem
 from .music import MusicPlayer
+from .options import OptionsMenu
 from .screens import INTRO_DURATION, Screens
 from .session import GameSession
+from .settings import Settings
 from .sound import SoundPlayer
 from .sprites import Sprites
 from .stats import MatchStats
+from .widgets import ButtonRenderer
 
 FPS = 60
 BOSS_STEP_DELAY = 0.5      # боссын нүүдэл хооронд (сек), тоглогч юу болсныг харах
@@ -61,28 +64,36 @@ BOSS_MODE_LABELS = {"eval": "хурдан (үнэлгээ)", "mcts": "ухаал
 
 class App:
     def __init__(self, session: Optional[GameSession] = None, boss=None, fps: int = FPS,
-                 boss_step_delay: float = BOSS_STEP_DELAY,
+                 boss_step_delay: Optional[float] = None,
                  boss_factory: Optional[Callable[[str], object]] = None,
                  boss_mode: str = "eval", start_screen: str = "menu",
-                 show_boss_panel: bool = True, sound: bool = True, logger=None,
+                 show_boss_panel: Optional[bool] = None, sound: bool = True, logger=None,
                  campaign: Optional[Campaign] = None,
-                 enemy_factory: Optional[Callable[[], object]] = None):
+                 enemy_factory: Optional[Callable[[], object]] = None,
+                 settings: Optional[Settings] = None):
         pygame.mixer.pre_init(44100, -16, 2, 512)   # дууны саатлыг багасгана
         pygame.init()
         pygame.display.set_caption("Outworld Devourer")
-        self.show_boss_panel = show_boss_panel
-        self.screen = pygame.display.set_mode(L.screen_size(show_boss_panel))
+        self.settings = settings if settings is not None else Settings.load()
+        self.show_boss_panel = self.settings.boss_panel if show_boss_panel is None \
+            else show_boss_panel
+        self.screen = None
+        self._set_mode()
         self.clock = pygame.time.Clock()
         self.fps = fps
         self.text = T.Text()
         self.sprites = Sprites(SPRITE_SIZE, L.CELL)
         self.sound = SoundPlayer(enabled=sound)
         self.music = MusicPlayer(enabled=sound)
+        self._apply_audio()
+        self.buttons = ButtonRenderer(self.text)
+        self.options = OptionsMenu(self.settings)
+        self.options_return = "menu"
         self.board = BoardView(self.text, self.sprites)
         self.hud = Hud(self.text)
         self.panel_view = BossPanel(self.text)
-        self.screens = Screens(self.text, self.sprites)
-        self.dungeon_view = DungeonView(self.text, self.sprites)
+        self.screens = Screens(self.text, self.sprites, self.buttons)
+        self.dungeon_view = DungeonView(self.text, self.sprites, self.buttons)
         self._campaign = campaign         # None бол анх хэрэг болоход save файлаас ачаална
         self.enemy_factory = enemy_factory or (lambda: TacticalAI())
         self.dungeon_map = None           # DungeonMap (газрын зургийн сонголт)
@@ -101,7 +112,9 @@ class App:
         self.boss_factory = boss_factory
         self.boss_mode = boss_mode
         self.boss = BossDriver(self._new_controller())
-        self.boss_step_delay = boss_step_delay
+        self._fixed_step_delay = boss_step_delay       # None → тохиргооны «дайсны хурд»
+        self.boss_step_delay = boss_step_delay if boss_step_delay is not None \
+            else self.settings.enemy_step_delay
         self.anim = Animator()
         self.vfx = Vfx()
         self.vfx_view = VfxView()
@@ -116,14 +129,14 @@ class App:
         self.mouse_pos = None
         self.running = True
 
-        self.screen_name = start_screen   # intro | menu | dungeon | help | game | result | reward
+        self.screen_name = start_screen   # intro | menu | dungeon | options | help | game | result | reward
         self.intro_t = 0.0
         self.menu_t = 0.0                 # цэсний оч хөдлөх хугацаа
         self.paused = False
         self.help_return = "menu"
         self.over_timer = 0.0
-        self.main_menu = Menu(self._main_items(), top=270)
-        self.pause_menu = Menu(self._pause_items(), top=230)
+        self.main_menu = Menu(self._main_items(), top=250, height=46, gap=10)
+        self.pause_menu = Menu(self._pause_items(), top=220)
         self.result_menu = Menu([MenuItem("again", "Дахин тоглох"),
                                  MenuItem("menu", "Үндсэн цэс")], top=410)
         self.reward_menu = Menu([MenuItem("map", "Газрын зураг")], top=500)
@@ -145,11 +158,16 @@ class App:
         return self.fixed_boss is None and ai_available()
 
     def _main_items(self) -> list:
-        return [MenuItem("play", "Тоглох (Dungeon)"),
-                MenuItem("quick", "Хурдан тулаан: Demon Lord"),
+        return [MenuItem("play", "Тоглох (Dungeon)", primary=True,
+                         hint="5 давхар, 20 үе — ахиц автоматаар хадгалагдана"),
+                MenuItem("quick", "Хурдан тулаан: Demon Lord",
+                         hint="Гурван баатар эсрэг тоглогчоос суралцдаг Demon Lord"),
                 MenuItem("boss_mode", f"Босс: {BOSS_MODE_LABELS[self.boss_mode]}",
-                         enabled=self._boss_mode_selectable()),
-                MenuItem("help", "Удирдлага"),
+                         enabled=self._boss_mode_selectable(),
+                         hint="Demon Lord-ийн AI: хурдан үнэлгээ эсвэл гүн MCTS (≤ 2 сек)"),
+                MenuItem("options", "Тохиргоо",
+                         hint="Дууны түвшин, дайсны хурд, бүтэн дэлгэц"),
+                MenuItem("help", "Удирдлага", hint="Товчлуур, хулганы удирдлага"),
                 MenuItem("quit", "Гарах")]
 
     def _pause_items(self) -> list:
@@ -157,8 +175,9 @@ class App:
             back = MenuItem("map", "Газрын зураг руу")
         else:
             back = MenuItem("menu", "Үндсэн цэс")
-        return [MenuItem("resume", "Үргэлжлүүлэх"),
+        return [MenuItem("resume", "Үргэлжлүүлэх", primary=True),
                 MenuItem("restart", "Шинээр эхлэх"),
+                MenuItem("options", "Тохиргоо"),
                 MenuItem("help", "Удирдлага"), back]
 
     @property
@@ -275,7 +294,102 @@ class App:
 
     def toggle_boss_panel(self) -> None:
         self.show_boss_panel = not self.show_boss_panel
-        self.screen = pygame.display.set_mode(L.screen_size(self.show_boss_panel))
+        self.settings.boss_panel = self.show_boss_panel
+        self.settings.save()
+        self._set_mode()
+
+    def _set_mode(self) -> None:
+        """Цонхны хэмжээ (самбартай/самбаргүй), бүтэн дэлгэц бол SCALED — байршил өөрчлөгдөхгүй."""
+        size = L.screen_size(self.show_boss_panel)
+        if self.settings.fullscreen:
+            try:
+                self.screen = pygame.display.set_mode(size, pygame.FULLSCREEN | pygame.SCALED)
+                return
+            except pygame.error:
+                self.settings.fullscreen = False
+        self.screen = pygame.display.set_mode(size)
+
+    def _apply_audio(self) -> None:
+        self.sound.set_gain(self.settings.sfx_gain)
+        self.music.set_gain(self.settings.music_gain)
+
+    # ------------------------------------------------------------------ тохиргоо
+    def open_options(self, came_from: str) -> None:
+        self.options_return = came_from          # "menu" | "pause"
+        self.options.index = 0
+        self.options.dragging = None
+        self.screen_name = "options"
+
+    def close_options(self) -> None:
+        self.settings.save()
+        self.options.dragging = None
+        self.screen_name = "game" if self.options_return == "pause" else "menu"
+
+    def _on_setting(self, key) -> None:
+        """Тохиргоо өөрчлөгдсөний дараа шууд хэрэгжүүлж хадгална."""
+        if key is None:
+            return
+        if key in Settings.VOLUME_KEYS:
+            self._apply_audio()
+            self.sound.play("tick")              # эффектийн түвшинг сонсгоно
+        elif key == "enemy_speed" and self._fixed_step_delay is None:
+            self.boss_step_delay = self.settings.enemy_step_delay
+        elif key == "boss_panel" and self.show_boss_panel != self.settings.boss_panel:
+            self.show_boss_panel = self.settings.boss_panel
+            self._set_mode()
+        elif key == "fullscreen":
+            self._set_mode()
+        elif key == "defaults":
+            self._apply_audio()
+            if self._fixed_step_delay is None:
+                self.boss_step_delay = self.settings.enemy_step_delay
+            self.show_boss_panel = self.settings.boss_panel
+            self._set_mode()
+        self.settings.save()
+
+    def _options_event(self, e) -> None:
+        opts = self.options
+        w = self.screen.get_width()
+        if e.type == pygame.KEYDOWN:
+            if e.key in (pygame.K_UP, pygame.K_DOWN):
+                opts.move(-1 if e.key == pygame.K_UP else 1)
+                self.sound.play("tick")
+            elif e.key in (pygame.K_LEFT, pygame.K_RIGHT):
+                self._on_setting(opts.adjust(-1 if e.key == pygame.K_LEFT else 1))
+            elif e.key in (pygame.K_RETURN, pygame.K_SPACE, pygame.K_KP_ENTER):
+                self._activate_option(opts.index)
+            elif e.key == pygame.K_ESCAPE:
+                self.sound.play("back")
+                self.close_options()
+        elif e.type == pygame.MOUSEMOTION:
+            if opts.dragging is not None:
+                self._on_setting(opts.set_slider_from_x(opts.dragging, e.pos[0], w))
+            else:
+                hit = opts.hit(e.pos, w)
+                if hit is not None and hit[1] != opts.index:
+                    opts.index = hit[1]
+                    self.sound.play("tick")
+        elif e.type == pygame.MOUSEBUTTONDOWN and e.button == 1:
+            hit = opts.hit(e.pos, w)
+            if hit is None:
+                return
+            opts.index = hit[1]
+            if hit[0] == "slider":
+                opts.dragging = hit[1]
+                self._on_setting(opts.set_slider_from_x(hit[1], e.pos[0], w))
+            else:
+                self._activate_option(hit[1])
+        elif e.type == pygame.MOUSEBUTTONUP and e.button == 1:
+            opts.dragging = None
+
+    def _activate_option(self, index: int) -> None:
+        key = self.options.activate(index)
+        if key == "back":
+            self.sound.play("back")
+            self.close_options()
+        elif key is not None:
+            self.sound.play("click")
+            self._on_setting(key)
 
     # ------------------------------------------------------------------ оролт
     def handle_event(self, e) -> None:
@@ -297,6 +411,8 @@ class App:
             self._menu_event(self.main_menu, e, self._on_main)
         elif self.screen_name == "dungeon":
             self._map_event(e)
+        elif self.screen_name == "options":
+            self._options_event(e)
         elif self.screen_name == "reward":
             self._reward_event(e)
         elif self.screen_name == "help":
@@ -341,6 +457,8 @@ class App:
             self.go_map()
         elif key == "quick":
             self.start_game()
+        elif key == "options":
+            self.open_options("menu")
         elif key == "boss_mode":
             i = BOSS_MODES.index(self.boss_mode)
             self.boss_mode = BOSS_MODES[(i + 1) % len(BOSS_MODES)]
@@ -356,6 +474,8 @@ class App:
             self.paused = False
         elif key == "restart":
             self.restart()
+        elif key == "options":
+            self.open_options("pause")
         elif key == "help":
             self.help_return = "pause"
             self.screen_name = "help"
@@ -608,6 +728,8 @@ class App:
         name = self.screen_name
         if name == "help":
             name = "game" if self.help_return == "pause" else "menu"
+        if name == "options":
+            name = "game" if self.options_return == "pause" else "menu"
         if name == "game" and self.state.is_over:
             return None
         return {"intro": "intro", "menu": "title", "dungeon": "title", "game": "battle",
@@ -621,7 +743,7 @@ class App:
             if self.intro_t >= INTRO_DURATION:
                 self.go_menu()
             return
-        if self.screen_name in ("menu", "help", "dungeon"):
+        if self.screen_name in ("menu", "help", "dungeon", "options"):
             self.menu_t += dt
         if self.screen_name == "dungeon" and self.dungeon_map is not None:
             self.dungeon_map.update(dt)
@@ -654,7 +776,14 @@ class App:
         elif self.screen_name == "menu":
             note = "" if self._boss_mode_selectable() else \
                 "Боссын AI (ai/) хараахан суугаагүй — түр босс тоглоно"
-            self.screens.draw_menu(self.screen, self.main_menu, self.mouse_pos, note, self.menu_t)
+            self.screens.draw_menu(self.screen, self.main_menu, self.mouse_pos, note, self.menu_t,
+                                   footer=self._progress_footer())
+        elif self.screen_name == "options":
+            from_pause = self.options_return == "pause"
+            if from_pause:
+                self._draw_game(overlay=False)
+            self.screens.draw_options(self.screen, self.options, self.mouse_pos, self.menu_t,
+                                      dimmed_bg=from_pause)
         elif self.screen_name == "dungeon":
             self.dungeon_view.draw_map(self.screen, self.dungeon_map, self.mouse_pos, self.menu_t)
         elif self.screen_name == "reward":
@@ -670,7 +799,11 @@ class App:
             self._draw_game()
         pygame.display.flip()
 
-    def _draw_game(self) -> None:
+    def _progress_footer(self) -> str:
+        c = self.campaign
+        return f"Dungeon: {len(c.data['cleared'])}/20 үе · Lv {c.level}"
+
+    def _draw_game(self, overlay: bool = True) -> None:
         interactive = not self.input_locked
         self.board.draw(self.screen, self.state, self.selection, self.anim,
                         self.hover if interactive else None, interactive,
@@ -689,7 +822,7 @@ class App:
                                  ai_connected=self.ai_connected)
         if self.state.is_over and not self.anim.busy:
             self.hud.draw_game_over(self.screen, self.state)
-        if self.paused:
+        if self.paused and overlay:
             self.screens.draw_pause(self.screen, self.pause_menu, self.mouse_pos)
 
     def run(self, max_frames: Optional[int] = None) -> None:

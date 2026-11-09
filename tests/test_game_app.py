@@ -19,9 +19,10 @@ def app(monkeypatch):
     from game.session import GameSession
     calls = []
     from game.campaign import Campaign
+    from game.settings import Settings
     session = GameSession(on_action=lambda before, a, ev: calls.append(a))
     a = App(session, boss=PlaceholderBoss(seed=0), boss_step_delay=0.0, start_screen="game",
-            campaign=Campaign())                       # path=None → файл бичихгүй
+            campaign=Campaign(), settings=Settings())   # path=None → файл бичихгүй
     a.hook_calls = calls
     yield a
     pygame.quit()
@@ -221,8 +222,10 @@ def make_app(monkeypatch, **kw):
     monkeypatch.setenv("SDL_AUDIODRIVER", "dummy")
     from game.app import App
     from game.campaign import Campaign
+    from game.settings import Settings
     kw.setdefault("boss_step_delay", 0.0)
     kw.setdefault("campaign", Campaign())             # path=None → файл бичихгүй
+    kw.setdefault("settings", Settings())
     return App(**kw)
 
 
@@ -240,7 +243,7 @@ def test_menu_play_pause_and_back_to_menu(monkeypatch):
     knight = app.state.units["knight"]
     click(app, layout.cell_center(knight.pos))
     assert app.selection.unit_uid is None             # түр зогссон үед талбар хаалттай
-    for _ in range(3):
+    for _ in range(4):
         key(app, pygame.K_DOWN)
     assert app.pause_menu.selected == "menu"
     key(app, pygame.K_RETURN)
@@ -252,7 +255,7 @@ def test_help_from_pause_returns_to_pause(monkeypatch):
     from game.boss_driver import PlaceholderBoss
     app = make_app(monkeypatch, boss=PlaceholderBoss(seed=0), start_screen="game")
     key(app, pygame.K_ESCAPE)
-    app.pause_menu.index = 2                          # «Удирдлага»
+    app.pause_menu.index = 3                          # «Удирдлага»
     key(app, pygame.K_RETURN)
     assert app.screen_name == "help"
     app.draw()
@@ -338,7 +341,7 @@ def test_boss_mode_disabled_without_ai(monkeypatch):
     assert not app.main_menu.items[2].enabled
     key(app, pygame.K_DOWN)
     key(app, pygame.K_DOWN)
-    assert app.main_menu.selected == "help"
+    assert app.main_menu.selected == "options"        # идэвхгүй «Босс» алгасагдана
     app.draw()
     pygame.quit()
 
@@ -585,4 +588,102 @@ def test_map_mouse_select_and_start(monkeypatch):
     app.draw()
     click(app, M.node_center("1-1", w))               # дахин дарвал эхэлнэ
     assert app.screen_name == "game" and app.stage_key == "1-1"
+    pygame.quit()
+
+
+# ---------------------------------------------------------------- тохиргоо (дуу, хурд, самбар)
+
+def test_options_from_main_menu_change_volume_and_save(monkeypatch, tmp_path):
+    from game.settings import Settings
+    settings = Settings.load(tmp_path / "settings.json")
+    app = make_app(monkeypatch, settings=settings)
+    app.main_menu.index = [i.key for i in app.main_menu.items].index("options")
+    key(app, pygame.K_RETURN)
+    assert app.screen_name == "options" and app.music_track() == "title"
+    app.draw()
+    key(app, pygame.K_LEFT)                           # ерөнхий дуу 80 → 70
+    assert settings.master == 70
+    assert app.sound.gain == pytest.approx(settings.sfx_gain)
+    assert app.music.gain == pytest.approx(settings.music_gain)
+    key(app, pygame.K_DOWN)
+    for _ in range(10):
+        key(app, pygame.K_LEFT)                       # хөгжим 0
+    assert settings.music == 0 and app.music.gain == 0
+    key(app, pygame.K_ESCAPE)
+    assert app.screen_name == "menu"
+    saved = Settings.load(tmp_path / "settings.json")
+    assert (saved.master, saved.music) == (70, 0)
+    pygame.quit()
+
+
+def test_options_mouse_slider_drag(monkeypatch):
+    from game import options as O
+    app = make_app(monkeypatch)
+    app.open_options("menu")
+    w = app.screen.get_width()
+    i = [r.key for r in O.ROWS].index("sfx")
+    bx, by, bw, bh = O.slider_bar(i, w)
+    click(app, (bx + bw * 0.2, by + bh / 2))
+    assert app.options.dragging == i and app.settings.sfx == 20
+    app.handle_event(pygame.event.Event(pygame.MOUSEMOTION, pos=(int(bx + bw * 0.9), by),
+                                        rel=(0, 0), buttons=(1, 0, 0)))
+    assert app.settings.sfx == 90
+    app.handle_event(pygame.event.Event(pygame.MOUSEBUTTONUP, pos=(0, 0), button=1))
+    assert app.options.dragging is None
+    app.draw()
+    pygame.quit()
+
+
+def test_options_panel_toggle_and_enemy_speed(monkeypatch):
+    from game import options as O
+    app = make_app(monkeypatch, boss_step_delay=None)
+    assert app.boss_step_delay == app.settings.enemy_step_delay
+    app.open_options("menu")
+    keys = [r.key for r in O.ROWS]
+    app.options.index = keys.index("enemy_speed")
+    key(app, pygame.K_RIGHT)
+    assert app.settings.enemy_speed == "fast" and app.boss_step_delay == 0.2
+    app.options.index = keys.index("boss_panel")
+    key(app, pygame.K_RETURN)
+    assert not app.show_boss_panel and app.screen.get_width() == layout.SCREEN_W
+    app.draw()
+    key(app, pygame.K_TAB)                            # Tab ч тохиргоонд бичигдэнэ
+    assert app.show_boss_panel and app.settings.boss_panel
+    app.options.index = keys.index("fullscreen")
+    key(app, pygame.K_RETURN)                         # dummy driver: алдаагүй (эсвэл буцаана)
+    assert app.screen is not None
+    app.options.index = keys.index("defaults")
+    key(app, pygame.K_RETURN)
+    assert app.settings.enemy_speed == "normal" and not app.settings.fullscreen
+    pygame.quit()
+
+
+def test_options_from_pause_returns_to_paused_game(monkeypatch):
+    from game.boss_driver import PlaceholderBoss
+    app = make_app(monkeypatch, boss=PlaceholderBoss(seed=0), start_screen="game")
+    key(app, pygame.K_ESCAPE)
+    app.pause_menu.index = [i.key for i in app.pause_menu.items].index("options")
+    key(app, pygame.K_RETURN)
+    assert app.screen_name == "options" and app.music_track() == "battle"
+    app.draw()
+    key(app, pygame.K_ESCAPE)
+    assert app.screen_name == "game" and app.paused
+    pygame.quit()
+
+
+def test_button_hover_animates(monkeypatch):
+    make_app(monkeypatch)
+    from game.theme import Text
+    from game.widgets import ButtonRenderer
+    b = ButtonRenderer(Text())
+    assert b.hover("x", True, now=0.0) == 1.0         # анх харагдахдаа шууд
+    assert b.hover("y", False, now=0.0) == 0.0
+    assert 0.0 < b.hover("y", True, now=0.05) < 1.0   # зөөлөн асна
+    assert b.hover("y", True, now=1.0) == 1.0
+    surf = pygame.Surface((400, 200))
+    for style in ("normal", "primary"):
+        b.draw(surf, (10, 10, 300, 50), "Тоглох", key=style, hot=True, style=style, now=1.0)
+    b.draw(surf, (10, 80, 300, 50), "Off", enabled=False)
+    b.slider(surf, (10, 150, 200, 10), 60, hot=True)
+    b.toggle(surf, (250, 140, 56, 26), True, hot=False)
     pygame.quit()

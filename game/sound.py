@@ -28,6 +28,7 @@ SKILL_SOUNDS = {
 }
 
 DEFAULT_VOLUME = 0.6
+DEFAULT_SFX_GAIN = 0.64       # тохиргооны анхны утга (ерөнхий 80% × эффект 80%) — VOLUMES-ийг хэвээр
 VOLUMES = {"step": 0.35, "tick": 0.35, "select": 0.45, "click": 0.45, "back": 0.4,
            "your_turn": 0.45, "win": 0.7, "lose": 0.7}
 
@@ -58,6 +59,7 @@ class SoundPlayer:
     def __init__(self, enabled: bool = True, folder: Path | None = None):
         self.muted = False
         self.ok = False
+        self.gain = DEFAULT_SFX_GAIN
         self._sounds = {}
         if not enabled:
             return
@@ -70,15 +72,24 @@ class SoundPlayer:
                 pygame.mixer.init()
             for name, file in SOUND_FILES.items():
                 snd = pygame.mixer.Sound(str(folder / file))
-                snd.set_volume(VOLUMES.get(name, DEFAULT_VOLUME))
+                snd.set_volume(self._volume(name))
                 self._sounds[name] = snd
             self.ok = True
         except Exception:   # audio төхөөрөмжгүй (pygame.error), файл алга — чимээгүй үргэлжилнэ
             self._sounds = {}
             self.ok = False
 
+    def _volume(self, name: str) -> float:
+        return min(1.0, VOLUMES.get(name, DEFAULT_VOLUME) * self.gain / DEFAULT_SFX_GAIN)
+
+    def set_gain(self, gain: float) -> None:
+        """Тохиргооны «ерөнхий × эффект» түвшин (0–1)."""
+        self.gain = max(0.0, min(1.0, gain))
+        for name, snd in self._sounds.items():
+            snd.set_volume(self._volume(name))
+
     def play(self, name: str) -> None:
-        if self.ok and not self.muted:
+        if self.ok and not self.muted and self.gain > 0:
             snd = self._sounds.get(name)
             if snd is not None:
                 snd.play()
