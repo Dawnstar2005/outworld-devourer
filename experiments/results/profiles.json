@@ -1,0 +1,239 @@
+{
+  "random": {
+    "version": 1,
+    "target_priority": {
+      "knight": 0.96,
+      "mage": 1.16,
+      "healer": 1.59
+    },
+    "habits": [
+      "Imp-үүдийг түрүүлж устгадаг",
+      "Taunt-ийг байнга ашигладаг (2.0/тулаан)"
+    ],
+    "stats": {
+      "games": 5,
+      "human_actions": 89,
+      "finished": 5,
+      "wins": 0,
+      "contribution": {
+        "knight": 0.306,
+        "mage": 0.265,
+        "healer": 0.429
+      },
+      "per_game": {
+        "damage": {
+          "knight": 20.0,
+          "mage": 45.0,
+          "healer": 0.0
+        },
+        "heal": 41.0,
+        "shield": 32.0,
+        "skills": {
+          "fireball": 1.6,
+          "heal": 1.4,
+          "ice_wall": 1.4,
+          "shield": 1.6,
+          "sword": 1.0,
+          "taunt": 2.0
+        }
+      }
+    }
+  },
+  "greedy": {
+    "version": 1,
+    "target_priority": {
+      "knight": 1.09,
+      "mage": 1.13,
+      "healer": 1.44
+    },
+    "habits": [
+      "Imp-үүдийг түрүүлж устгадаг"
+    ],
+    "stats": {
+      "games": 5,
+      "human_actions": 105,
+      "finished": 5,
+      "wins": 0,
+      "contribution": {
+        "knight": 0.397,
+        "mage": 0.251,
+        "healer": 0.352
+      },
+      "per_game": {
+        "damage": {
+          "knight": 144.0,
+          "mage": 95.0,
+          "healer": 0.0
+        },
+        "heal": 95.0,
+        "shield": 38.0,
+        "skills": {
+          "fireball": 2.0,
+          "heal": 3.4,
+          "ice_wall": 1.0,
+          "shield": 2.0,
+          "sword": 7.2,
+          "taunt": 0.6
+        }
+      }
+    }
+  },
+  "healer_reliant": {
+    "version": 1,
+    "target_priority": {
+      "knight": 1.04,
+      "mage": 1.19,
+      "healer": 1.45
+    },
+    "habits": [
+      "Healer Knight-ийн ард нуугддаг"
+    ],
+    "stats": {
+      "games": 5,
+      "human_actions": 126,
+      "finished": 5,
+      "wins": 0,
+      "contribution": {
+        "knight": 0.36,
+        "mage": 0.28,
+        "healer": 0.36
+      },
+      "per_game": {
+        "damage": {
+          "knight": 176.0,
+          "mage": 140.0,
+          "healer": 0.0
+        },
+        "heal": 128.0,
+        "shield": 52.0,
+        "skills": {
+          "fireball": 2.6,
+          "heal": 4.0,
+          "ice_wall": 1.2,
+          "shield": 2.6,
+          "sword": 8.8,
+          "taunt": 0.4
+        }
+      }
+    }
+  },
+  "mage_reliant": {
+    "version": 1,
+    "target_priority": {
+      "knight": 1.12,
+      "mage": 1.14,
+      "healer": 1.39
+    },
+    "habits": [
+      "Mage алсаас довтолдог (боссоос дунджаар 5.6 нүд)",
+      "Imp-үүдийг түрүүлж устгадаг"
+    ],
+    "stats": {
+      "games": 5,
+      "human_actions": 112,
+      "finished": 5,
+      "wins": 0,
+      "contribution": {
+        "knight": 0.415,
+        "mage": 0.256,
+        "healer": 0.329
+      },
+      "per_game": {
+        "damage": {
+          "knight": 168.0,
+          "mage": 105.0,
+          "healer": 0.0
+        },
+        "heal": 109.0,
+        "shield": 26.0,
+        "skills": {
+          "fireball": 2.2,
+          "heal": 3.6,
+          "ice_wall": 1.0,
+          "shield": 1.4,
+          "sword": 8.4,
+          "taunt": 0.2
+        }
+      }
+    }
+  },
+  "aggressive": {
+    "version": 1,
+    "target_priority": {
+      "knight": 1.18,
+      "mage": 1.1,
+      "healer": 1.32
+    },
+    "habits": [
+      "Knight-ийн хохиролд их найддаг (нийт хувь нэмрийн 47%)"
+    ],
+    "stats": {
+      "games": 5,
+      "human_actions": 104,
+      "finished": 5,
+      "wins": 0,
+      "contribution": {
+        "knight": 0.466,
+        "mage": 0.238,
+        "healer": 0.296
+      },
+      "per_game": {
+        "damage": {
+          "knight": 172.0,
+          "mage": 95.0,
+          "healer": 0.0
+        },
+        "heal": 88.0,
+        "shield": 30.0,
+        "skills": {
+          "fireball": 2.2,
+          "heal": 3.0,
+          "ice_wall": 1.2,
+          "shield": 1.6,
+          "sword": 8.6,
+          "taunt": 1.0
+        }
+      }
+    }
+  },
+  "cautious": {
+    "version": 1,
+    "target_priority": {
+      "knight": 1.06,
+      "mage": 1.17,
+      "healer": 1.44
+    },
+    "habits": [
+      "Taunt-ийг байнга ашигладаг (3.2/тулаан)",
+      "Mage алсаас довтолдог (боссоос дунджаар 6.1 нүд)"
+    ],
+    "stats": {
+      "games": 5,
+      "human_actions": 137,
+      "finished": 5,
+      "wins": 0,
+      "contribution": {
+        "knight": 0.378,
+        "mage": 0.271,
+        "healer": 0.351
+      },
+      "per_game": {
+        "damage": {
+          "knight": 152.0,
+          "mage": 135.0,
+          "healer": 0.0
+        },
+        "heal": 123.0,
+        "shield": 52.0,
+        "skills": {
+          "fireball": 3.2,
+          "heal": 3.8,
+          "ice_wall": 1.8,
+          "shield": 2.6,
+          "sword": 7.6,
+          "taunt": 3.2
+        }
+      }
+    }
+  }
+}
