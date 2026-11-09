@@ -22,6 +22,7 @@ from engine import (DEMONS, END_TURN, SKILLS, UNIT_TYPES, Action, GameState, app
                     area_cells, legal_actions, next_state, unit_actions)
 
 from .evaluate import DEFAULT_PRIORITY, evaluate
+from .mcts import MCTSPlanner
 
 
 @dataclass
@@ -29,6 +30,7 @@ class Option:
     action: Action
     label: str
     score: float
+    visits: int = 0      # MCTS-ийн зочилсон тоо (eval горимд 0)
 
 
 @dataclass
@@ -41,6 +43,8 @@ class Decision:
     enraged: bool = False
     random_pick: bool = False
     elapsed: float = 0.0                # секунд
+    mode: str = "eval"                  # "mcts" | "eval"
+    iterations: int = 0                 # MCTS-ийн давталт
 
     def to_panel(self) -> dict:
         """«Боссын бодол» самбарын өгөгдөл (GD үүнийг зурна)."""
@@ -51,6 +55,8 @@ class Decision:
             "enraged": self.enraged,
             "random_pick": self.random_pick,
             "ms": round(self.elapsed * 1000),
+            "mode": self.mode,
+            "iterations": self.iterations,
         }
 
     def to_text(self) -> str:
@@ -118,10 +124,22 @@ class BossAI:
         "target_priority": {"knight": 1.0, "mage": 1.2, "healer": 1.8}
         "habits": ["Healer-т их найддаг (эдгээлт 8/тулаан)", ...]   # самбарт
     profile=None бол суралцдаггүй босс (A/B туршилтын B бүлэг).
+
+    mode="mcts" (default) — шилдэг 5-ыг MCTS-ээр `lookahead` ээлж урагш шалгана.
+    mode="eval" — зөвхөн нөхцөл үнэлэх функц (11/25-ны шийдвэрийн цэгийн нөөц хувилбар).
+    time_limit — MCTS-ийн хугацаа (сек). max_iters өгвөл хугацааны оронд давталтаар
+    зогсоно (тест, туршилтыг давтагдахуйц болгоно).
+    predictor — DQ-ийн дараагийн нүүдэл таамаглагч (mcts.py-ийн тайлбарыг үз).
     """
 
     def __init__(self, profile: dict | None = None, epsilon: float = 0.1, top_k: int = 5,
-                 seed: int | None = None, weights: dict | None = None):
+                 seed: int | None = None, weights: dict | None = None, mode: str = "mcts",
+                 time_limit: float = 1.0, max_iters: int | None = None, lookahead: int = 3,
+                 predictor=None):
+        self.mode = mode
+        self.planner = MCTSPlanner(self.evaluate, random.Random(None if seed is None else seed + 1),
+                                   lookahead=lookahead, time_limit=time_limit,
+                                   max_iters=max_iters, predictor=predictor)
         self.profile = profile or {}
         self.epsilon = epsilon
         self.top_k = top_k
@@ -175,6 +193,16 @@ class BossAI:
                 apply(end, x)
             finals.append((self.evaluate(end), seq, a))
         finals.sort(key=lambda t: t[0], reverse=True)
+        visits = [0] * len(finals)
+
+        # 2б. MCTS: тоглогчийн хариу нүүдлийг тооцож 2–3 ээлж урагш шалгах
+        iterations = 0
+        if self.mode == "mcts" and len(finals) > 1:
+            first_of = {id(seq): a for _, seq, a in finals}
+            res = self.planner.search(state, [seq for _, seq, _ in finals])
+            iterations = self.planner.iterations
+            finals = [(mean, seq, first_of[id(seq)]) for seq, _, mean in res]
+            visits = [v for _, v, _ in res]
 
         # 3. Сонгох (10% санамсаргүй — шилдэг 5-аас)
         chosen_i = 0
@@ -190,12 +218,13 @@ class BossAI:
             shown[-1] = chosen_i
         options = [Option(finals[i][2] or END_TURN,
                           action_label(finals[i][2], state) if finals[i][2] else "—",
-                          finals[i][0]) for i in shown]
+                          finals[i][0], visits[i]) for i in shown]
         return Decision(actions=seq, score=score, options=options,
                         chosen=shown.index(chosen_i),
                         habits=list(self.profile.get("habits", [])),
                         enraged=enraged, random_pick=random_pick,
-                        elapsed=time.perf_counter() - t0)
+                        elapsed=time.perf_counter() - t0,
+                        mode=self.mode if iterations else "eval", iterations=iterations)
 
     def play_turn(self, state: GameState):
         """decide() + нүүдлүүдийг state дээр хийнэ. (Decision, events) буцаана."""
