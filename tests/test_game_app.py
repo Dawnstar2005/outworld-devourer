@@ -140,7 +140,8 @@ def test_use_skill_with_hotkey_and_click(app):
     app.hover = (4, 1)
     app.draw()                                            # урьдчилсан харагдац зурагдана
     click(app, layout.cell_center((4, 1)))
-    assert s.units["demon_lord"].hp == 380
+    from engine import SKILLS
+    assert s.units["demon_lord"].hp == s.units["demon_lord"].max_hp - SKILLS["sword"].power
     assert any(f.kind == "skill" for f in app.anim.floats)
     assert app.anim.flashes
     assert app.hook_calls[-1].skill == "sword"

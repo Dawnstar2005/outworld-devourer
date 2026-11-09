@@ -449,9 +449,12 @@ def test_area_damage_targets_and_preview_use_engine():
     assert (3, 1) in sel.target_cells
     a = sel.action_for_target((3, 1))
     fx = sel.preview(a)
-    assert fx["demon_lord"]["hp"] == -25 and fx["imp1"]["hp"] == -25
-    assert "imp2" not in fx and not fx["imp1"].get("dies")
-    assert s.units["demon_lord"].hp == 400                 # жинхэнэ төлөв хөндөгдөөгүй
+    from engine import SKILLS
+    power = SKILLS["fireball"].power                       # тэнцвэрийн утгаас хамааралгүй
+    imp = s.units["imp1"]
+    assert fx["demon_lord"]["hp"] == -power and fx["imp1"]["hp"] == -min(power, imp.hp)
+    assert "imp2" not in fx and bool(fx["imp1"].get("dies")) == (power >= imp.hp)
+    assert s.units["demon_lord"].hp == s.units["demon_lord"].max_hp   # жинхэнэ төлөв хөндөгдөөгүй
     assert sel.preview(a) is fx                             # cache
 
 
