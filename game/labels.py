@@ -32,6 +32,32 @@ def skill_name(sid: str) -> str:
     return sk.name if sk else sid
 
 
+def action_label(action, state: GameState) -> str:
+    """Нүүдлийг монголоор: «Манан алхам → Цус сорох Mage-т», «Нялцгай цохилт (Knight + Mage)»."""
+    from engine import area_cells
+    if action.is_end_turn:
+        return "Ээлж дуусгах"
+    u = state.units[action.unit]
+    parts = []
+    if action.leap and u.type.leap:
+        parts.append(skill_name(u.type.leap) + " →")
+    if action.skill is None:
+        parts.append("Хүлээх" if action.dest == u.pos and not action.leap
+                     else f"Хөдлөх ({action.dest[0]},{action.dest[1]})")
+        return " ".join(parts)
+    sk = SKILLS[action.skill]
+    if action.target_uid:
+        parts.append(f"{sk.name} {unit_name(action.target_uid, state)}-т")
+    elif sk.kind == "area_damage" and action.target is not None:
+        cells = set(area_cells(action.target))
+        hit = [unit_name(e.uid, state) for e in state.alive_units()
+               if e.side != u.side and e.pos in cells]
+        parts.append(f"{sk.name} ({' + '.join(hit)})" if hit else sk.name)
+    else:
+        parts.append(sk.name)
+    return " ".join(parts)
+
+
 def event_text(ev: dict, state: Optional[GameState] = None) -> Optional[str]:
     """Нэг үйл явдлыг log-ийн мөр болгоно. Харуулах шаардлагагүй бол None."""
     t = ev.get("type")
