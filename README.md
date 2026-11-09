@@ -12,8 +12,8 @@ AI босстой, 2D ээлжит тактик тоглоом. Knight, Mage, He
 | `engine/` | Тоглоомын дүрэм: төлөв, нүүдэл, ур чадвар, ээлж. **pygame-гүй.** Тоглоом болон AI хоёулаа үүнийг ашиглана | AI |
 | `ai/` | Боссын AI: нөхцөл үнэлэх функц, MCTS, уур хилэн, «Боссын бодол»-ын өгөгдөл | AI |
 | `game/` | Pygame: дүрслэл, UI, sprite, дуу, «Боссын бодол» самбар, .exe build | GD |
-| `learning/` | Тоглолтын log, зуршлын профайл, дараагийн нүүдэл таамаглагч | DQ |
-| `bots/`, `experiments/` | Скриптэй bot тоглогчид, 100 тулааны туршилт, A/B | DQ |
+| `learning/` | Тоглолтын log, зуршлын профайл, дараагийн нүүдэл таамаглагч | GD (өмнө нь DQ) |
+| `bots/`, `experiments/` | Скриптэй bot тоглогчид, 100 тулааны туршилт, A/B | GD (өмнө нь DQ) |
 | `docs/` | GDD, тэнцвэрийн хүснэгт, төслийн баримт | PM |
 | `tests/` | Автомат тест (`pytest`) | Бүгд |
 
@@ -28,7 +28,7 @@ python -m pip install -r requirements.txt
 python -m pytest -q
 ```
 
-## `engine` API (GD, DQ-д зориулав)
+## `engine` API (GD-д зориулав)
 
 ```python
 from engine import GameState, legal_actions, apply, END_TURN
