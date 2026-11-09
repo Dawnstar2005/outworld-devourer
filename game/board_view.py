@@ -8,6 +8,9 @@
 Бай нүд, 3×3 бүс, Мөсөн ханын нүд бүгд engine-ээс (unit_actions, area_cells, wall_cells) ирнэ.
 """
 
+import math
+import re
+
 import pygame
 
 from engine import area_cells, wall_cells
@@ -19,6 +22,16 @@ from . import theme as T
 UNIT_INSET = 8
 HP_BAR_H = 6
 HELP_KINDS = ("heal", "shield")
+SPRITE_PX = 64            # Dungeon sprite-ийн хэмжээ
+BOSS_PX = 72              # босс арай том
+FRAME = L.MARGIN          # талбарын эргэн тойрны хананы зурвасын өргөн
+TORCH_PX = 34
+GLOW_R = 64
+GLOW_COLORS = {"slime": (120, 230, 90), "goblin": (255, 170, 60), "vampire": (200, 70, 120),
+               "demon": (255, 110, 60), "hell": (255, 120, 40)}
+FLOOR_ACCENT_EVERY = {"hell": 19}     # floor_1 тун ховор (хэт тод лав); бусад сэдэвт арай олон
+FLOOR_ACCENT_DEFAULT = 6
+_DIGITS = re.compile(r"(\d+)$")
 
 
 def target_category(kind) -> str:
@@ -27,12 +40,66 @@ def target_category(kind) -> str:
     return "help" if kind in HELP_KINDS else "harm"
 
 
+def _cell_hash(x: int, y: int, salt: int = 0) -> int:
+    """Нүд бүрт тогтмол (deterministic) псевдо-санамсаргүй тоо."""
+    return ((x * 73856093) ^ (y * 19349663) ^ (salt * 83492791)) & 0x7FFFFFFF
+
+
+def _glow_surface(color, radius=GLOW_R) -> pygame.Surface:
+    surf = pygame.Surface((radius * 2, radius * 2), pygame.SRCALPHA)
+    steps = 16
+    for i in range(steps):
+        r = radius - i * radius // steps
+        a = int(110 * ((i + 1) / steps) ** 2)
+        pygame.draw.circle(surf, color + (a,), (radius, radius), r)
+    return surf
+
+
 class BoardView:
     def __init__(self, text: T.Text, sprites=None):
         self.text = text
-        self.sprites = sprites if sprites is not None and sprites.ok else None
-        self._board = self._build_board()
+        self.sprites = sprites          # ok=False үед ч хадгална: Dungeon sprite тусдаа ачаалагдсан байж болно
+        self._t = 0.0
+        self._theme_name = None
+        self._tiles = None
+        self._boards = {}               # theme → (surface, pos) cache
+        self._board, self._board_pos = self._get_board(None)
         self._overlays = {}
+        self._obst_key = None
+        self._obst_surf = None
+        self._scaled = {}
+        self._shadow = None
+        self._glow = None
+        self._torch_pts = []
+
+    # ---- сэдэв ----
+    def set_theme(self, theme) -> None:
+        """Давхрын сэдэв (slime/goblin/vampire/demon/hell). None → хуучин харагдац."""
+        tiles = self.sprites.theme(theme) if (theme and self.sprites is not None) else None
+        self._tiles = tiles
+        self._theme_name = theme if tiles is not None else None
+        self._board, self._board_pos = self._get_board(self._theme_name)
+        self._obst_key = None
+        self._glow = None
+        if tiles is not None and tiles.torch is not None:
+            cy0, cy1 = L.BOARD_Y + L.BOARD_PX_H // 4, L.BOARD_Y + 3 * L.BOARD_PX_H // 4
+            xl, xr = L.BOARD_X - 2, L.BOARD_X + L.BOARD_PX_W + 2
+            self._torch_pts = [(xl, cy0), (xl, cy1), (xr, cy0), (xr, cy1)]
+            self._glow = _glow_surface(GLOW_COLORS.get(theme, (255, 160, 60)))
+        else:
+            self._torch_pts = []
+
+    def tick(self, dt: float) -> None:
+        """Бамбарын анивчилтын цаг (заавал биш; `draw(t=...)`-ийн оронд)."""
+        self._t += dt
+
+    def _get_board(self, theme):
+        got = self._boards.get(theme)
+        if got is None:
+            got = self._build_themed(self._tiles, theme) if theme else \
+                (self._build_board(), (L.BOARD_X, L.BOARD_Y))
+            self._boards[theme] = got
+        return got
 
     # ---- нэг удаа бэлтгэх surface ----
     def _build_board(self) -> pygame.Surface:
@@ -59,6 +126,51 @@ class BoardView:
                 surf.blit(lbl, (x * L.CELL + 3, y * L.CELL + 2))
         return surf
 
+    def _build_themed(self, tiles, theme):
+        """Сэдэвт талбар + эргэн тойрны хана: нэг том surface (хана хүртэл) болгож бэлтгэнэ."""
+        W, H = L.BOARD_PX_W + 2 * FRAME, L.BOARD_PX_H + 2 * FRAME
+        surf = pygame.Surface((W, H))
+        surf.fill((14, 12, 16))
+        every = FLOOR_ACCENT_EVERY.get(theme, FLOOR_ACCENT_DEFAULT)
+        shade = pygame.Surface((L.CELL, L.CELL), pygame.SRCALPHA)
+        for x in range(BOARD_W):
+            for y in range(BOARD_H):
+                idx = 0
+                if len(tiles.floors) > 1 and _cell_hash(x, y, 1) % every == 0:
+                    idx = 1
+                pos = (FRAME + x * L.CELL, FRAME + y * L.CELL)
+                surf.blit(tiles.floors[idx], pos)
+                # хөдлөх/бай тодруулга харагдахын тулд бага зэрэг бараандуулна
+                shade.fill((8, 8, 14, 70 if (x + y) % 2 == 0 else 100))
+                surf.blit(shade, pos)
+        grid = (0, 0, 0, 70)
+        gl = pygame.Surface((L.BOARD_PX_W, L.BOARD_PX_H), pygame.SRCALPHA)
+        for i in range(BOARD_W + 1):
+            pygame.draw.line(gl, grid, (i * L.CELL, 0), (i * L.CELL, L.BOARD_PX_H))
+        for i in range(BOARD_H + 1):
+            pygame.draw.line(gl, grid, (0, i * L.CELL), (L.BOARD_PX_W, i * L.CELL))
+        surf.blit(gl, (FRAME, FRAME))
+        # хана: wall tile-ийг зурвасын өргөнд багтааж (smoothscale), бараандуулна
+        if tiles.wall is not None:
+            wt = pygame.transform.smoothscale(tiles.wall, (FRAME, FRAME))
+            wt.fill((115, 115, 125, 255), special_flags=pygame.BLEND_RGBA_MULT)
+            for i in range(0, W, FRAME):
+                surf.blit(wt, (i, 0))
+                surf.blit(wt, (i, H - FRAME))
+            for j in range(FRAME, H - FRAME, FRAME):
+                surf.blit(wt, (0, j))
+                surf.blit(wt, (W - FRAME, j))
+            inner = pygame.Rect(FRAME - 1, FRAME - 1, L.BOARD_PX_W + 2, L.BOARD_PX_H + 2)
+            pygame.draw.rect(surf, (10, 8, 12), inner, 2)
+        # бамбар (ханан дээр, талбарын ирмэг рүү бага зэрэг орсон)
+        if tiles.torch is not None:
+            torch = pygame.transform.scale(tiles.torch, (TORCH_PX, TORCH_PX))
+            cys = (L.BOARD_PX_H // 4, 3 * L.BOARD_PX_H // 4)
+            for cx in (FRAME - 2, FRAME + L.BOARD_PX_W + 2):
+                for cy in cys:
+                    surf.blit(torch, (cx - TORCH_PX // 2, FRAME + cy - TORCH_PX // 2))
+        return surf, (L.BOARD_X - FRAME, L.BOARD_Y - FRAME)
+
     def _overlay(self, rgba) -> pygame.Surface:
         surf = self._overlays.get(rgba)
         if surf is None:
@@ -75,8 +187,13 @@ class BoardView:
         surf.blit(ov, L.cell_rect(cell)[:2])
 
     # ---- зурах ----
-    def draw(self, surf, state, selection, anim, hover, interactive: bool, fx=None):
-        surf.blit(self._board, (L.BOARD_X, L.BOARD_Y))
+    def draw(self, surf, state, selection, anim, hover, interactive: bool, fx=None, t=None):
+        """`t` — секундээр цаг (бамбарын анивчилт). None бол tick()/системийн цагийг ашиглана."""
+        if t is None:
+            t = self._t if self._t else pygame.time.get_ticks() / 1000.0
+        surf.blit(self._board, self._board_pos)
+        self._draw_obstacles(surf, state)
+        self._draw_torch_glow(surf, t)
         self._draw_walls(surf, state.walls)
         for fl in anim.flashes:
             for cell in fl.cells:
@@ -121,6 +238,47 @@ class BoardView:
             label.set_alpha(int(255 * f.alpha))
             x, y = f.pos()
             surf.blit(label, label.get_rect(center=(int(x), int(y) - L.CELL // 3)))
+
+    def _draw_obstacles(self, surf, state) -> None:
+        obs = getattr(state, "obstacles", None)
+        if not obs:
+            return
+        key = (self._theme_name, frozenset(obs))
+        if self._obst_key != key:
+            layer = pygame.Surface((L.BOARD_PX_W, L.BOARD_PX_H), pygame.SRCALPHA)
+            tiles = self._tiles
+            for (x, y) in obs:
+                pos = (x * L.CELL, y * L.CELL)
+                if tiles is not None and tiles.obstacles:
+                    # ил тод дэвсгэртэй тул доор нь шалны tile тавина
+                    layer.blit(tiles.floors[0], pos)
+                    dark = pygame.Surface((L.CELL, L.CELL), pygame.SRCALPHA)
+                    dark.fill((8, 8, 14, 110))
+                    layer.blit(dark, pos)
+                    ob = tiles.obstacles[_cell_hash(x, y, 2) % len(tiles.obstacles)]
+                    layer.blit(ob, pos)
+                else:
+                    self._rock(layer, pos)
+            self._obst_key, self._obst_surf = key, layer
+        surf.blit(self._obst_surf, (L.BOARD_X, L.BOARD_Y))
+
+    @staticmethod
+    def _rock(layer, pos) -> None:
+        """Сэдэвгүй үеийн саад: энгийн чулуу."""
+        r = pygame.Rect(pos[0] + 8, pos[1] + 12, L.CELL - 16, L.CELL - 22)
+        pygame.draw.ellipse(layer, (20, 20, 26), r.move(2, 3))
+        pygame.draw.ellipse(layer, (96, 98, 112), r)
+        pygame.draw.ellipse(layer, (140, 142, 158), r.inflate(-18, -20).move(-6, -6))
+        pygame.draw.ellipse(layer, (50, 52, 62), r, 2)
+
+    def _draw_torch_glow(self, surf, t: float) -> None:
+        if self._glow is None:
+            return
+        for i, (cx, cy) in enumerate(self._torch_pts):
+            k = 0.78 + 0.14 * math.sin(t * 9.0 + i * 2.1) + 0.08 * math.sin(t * 23.0 + i * 5.3)
+            g = self._glow
+            g.set_alpha(max(0, min(255, int(255 * k))))
+            surf.blit(g, (cx - GLOW_R, cy - 4 - GLOW_R))
 
     def _draw_moves(self, surf, selection, sel, hover):
         for cell in selection.move_cells:
@@ -229,9 +387,66 @@ class BoardView:
         surf.blit(lbl, lbl.get_rect(center=r.center))
         return r
 
+    def _scaled_unit(self, kind, dim, px):
+        key = (kind, dim, px)
+        if key not in self._scaled:
+            img = self.sprites.dungeon.unit(kind, dim)
+            if img is not None and img.get_width() != px:
+                img = pygame.transform.scale(img, (px, px))
+            self._scaled[key] = img
+        return self._scaled[key]
+
+    def _shadow_surf(self) -> pygame.Surface:
+        if self._shadow is None:
+            sh = pygame.Surface((56, 22), pygame.SRCALPHA)
+            for i in range(5):
+                pygame.draw.ellipse(sh, (0, 0, 0, 30), (i * 2, i, 56 - i * 4, 22 - i * 2))
+            self._shadow = sh
+        return self._shadow
+
     def _draw_unit_box(self, surf, kind, uid, center, hp_frac, acted, alpha=1.0):
+        """Дүр зурах: Dungeon 64 px sprite (сүүдэр, цагираг, HP) → хуучин sprite → өнгөт хайрцаг."""
+        cx, cy = int(center[0]), int(center[1])
+        boss = T.is_boss(kind)
+        px = BOSS_PX if boss else SPRITE_PX
+        sprite = self._scaled_unit(kind, acted, px) if self.sprites is not None else None
+        if sprite is None:
+            self._draw_unit_legacy(surf, kind, uid, center, hp_frac, acted, alpha)
+            return
+        W = 96
+        box = pygame.Surface((W, W), pygame.SRCALPHA)
+        m = W // 2
+        feet = m + px // 2 - 12                     # хөлийн түвшин
+        ring_c = T.side_ring_color(kind)
+        if acted:
+            ring_c = T.dim(ring_c, 0.6)
+        box.blit(self._shadow_surf(), (m - 28, feet - 12))
+        rw = 52 if boss else 46
+        ring = pygame.Rect(0, 0, rw, 18 if boss else 16)
+        ring.center = (m, feet - 1)
+        pygame.draw.ellipse(box, ring_c + (70,), ring)
+        pygame.draw.ellipse(box, ring_c, ring, 3 if boss else 2)
+        box.blit(sprite, sprite.get_rect(midbottom=(m, feet + 8)))
+        mt = _DIGITS.search(uid or "")
+        if mt and not boss and kind != "knight":
+            num = self.text.render(mt.group(1), 15, (255, 255, 255), bold=True)
+            box.blit(num, (m - px // 2 + 2, feet - px + 14))
+        bar_w = 48 if not boss else 56
+        bar = pygame.Rect(m - bar_w // 2, feet + 12, bar_w, 5)
+        pygame.draw.rect(box, (10, 10, 14), bar.inflate(2, 2), border_radius=3)
+        frac = max(0.0, min(1.0, hp_frac))
+        if frac > 0:
+            fill = bar.copy()
+            fill.w = max(2, int(bar_w * frac))
+            col = T.HP_LOW if frac < 0.3 else (T.HP_HERO if T._is_hero(kind) else T.HP_DEMON)
+            pygame.draw.rect(box, col, fill, border_radius=2)
+        if alpha < 1.0:
+            box.set_alpha(int(255 * alpha))
+        surf.blit(box, box.get_rect(center=(cx, cy - 4)))
+
+    def _draw_unit_legacy(self, surf, kind, uid, center, hp_frac, acted, alpha=1.0):
         size = L.CELL - 2 * UNIT_INSET
-        color = T.UNIT_COLORS[kind]
+        color = T.unit_color(kind)
         if acted:
             color = T.dim(color)
         box = pygame.Surface((size, size), pygame.SRCALPHA)
@@ -248,7 +463,7 @@ class BoardView:
             pygame.draw.rect(box, color, (0, 0, size, size), border_radius=10)
             pygame.draw.rect(box, T.dim(color, 0.6) if not acted else (40, 40, 50),
                              (0, 0, size, size), 2, border_radius=10)
-            letter = T.UNIT_LETTERS[kind]
+            letter = T.unit_letter(kind)
             if kind == "imp" and uid[3:].isdigit():
                 letter += uid[3:]
             lbl = self.text.render(letter, 34 if kind != "imp" else 28,
@@ -262,7 +477,7 @@ class BoardView:
         if frac > 0:
             fill = bar.copy()
             fill.w = max(2, int(bar_w * frac))
-            hp_color = T.HP_LOW if frac < 0.3 else (T.HP_DEMON if kind in ("demon_lord", "imp")
+            hp_color = T.HP_LOW if frac < 0.3 else (T.HP_DEMON if not T._is_hero(kind)
                                                      else T.HP_HERO)
             pygame.draw.rect(box, hp_color, fill, border_radius=3)
         if alpha < 1.0:
