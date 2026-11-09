@@ -1,6 +1,7 @@
 """Үндсэн давталт (pygame): оролт → нүүдэл → анимаци → зурах, 60 FPS.
 
-Дэлгэц: "menu" (үндсэн цэс) → "game" (тоглоом, Esc-ээр түр зогсоно) → "result" (үр дүн).
+Дэлгэц: "intro" (эхлэлийн дүр зураг) → "menu" (үндсэн цэс) → "game" (тоглоом, Esc-ээр
+түр зогсоно) → "result" (үр дүн). Хөгжим: эхлэл/цэс — "title", тулаан — "battle".
 "help" (удирдлага) цэс болон түр зогсолтоос нээгдэнэ. Tab — «Боссын бодол» самбар.
 
 Хүний нүүдэл: хулгана/товчлуур → Selection → GameSession.play()
@@ -29,7 +30,8 @@ from .hud import Hud
 from .input import Selection
 from .labels import event_text
 from .menu import Menu, MenuItem
-from .screens import Screens
+from .music import MusicPlayer
+from .screens import INTRO_DURATION, Screens
 from .session import GameSession
 from .sound import SoundPlayer
 from .sprites import Sprites
@@ -60,6 +62,7 @@ class App:
         self.text = T.Text()
         self.sprites = Sprites(SPRITE_SIZE, L.CELL)
         self.sound = SoundPlayer(enabled=sound)
+        self.music = MusicPlayer(enabled=sound)
         self.board = BoardView(self.text, self.sprites)
         self.hud = Hud(self.text)
         self.panel_view = BossPanel(self.text)
@@ -86,7 +89,9 @@ class App:
         self.mouse_pos = None
         self.running = True
 
-        self.screen_name = start_screen   # menu | help | game | result
+        self.screen_name = start_screen   # intro | menu | help | game | result
+        self.intro_t = 0.0
+        self.menu_t = 0.0                 # цэсний оч хөдлөх хугацаа
         self.paused = False
         self.help_return = "menu"
         self.over_timer = 0.0
@@ -184,9 +189,12 @@ class App:
             self.toggle_boss_panel()
             return
         if e.type == pygame.KEYDOWN and e.key == pygame.K_m:
-            self.sound.toggle_mute()
+            self.music.set_muted(self.sound.toggle_mute())
             return
-        if self.screen_name == "menu":
+        if self.screen_name == "intro":
+            if e.type == pygame.KEYDOWN or (e.type == pygame.MOUSEBUTTONDOWN and e.button == 1):
+                self.go_menu()                     # алгасах
+        elif self.screen_name == "menu":
             self._menu_event(self.main_menu, e, self._on_main)
         elif self.screen_name == "help":
             if e.type == pygame.KEYDOWN or (e.type == pygame.MOUSEBUTTONDOWN and e.button == 1):
@@ -385,7 +393,23 @@ class App:
             return "Дуу унтраалттай (M)"
         return ""
 
+    def music_track(self):
+        """Одоогийн дэлгэцэд тохирох хөгжим (None — хөгжимгүй, үр дүнд jingle сонсогдоно)."""
+        name = self.screen_name
+        if name == "help":
+            name = "game" if self.help_return == "pause" else "menu"
+        return {"intro": "title", "menu": "title", "game": "battle"}.get(name)
+
     def update(self, dt: float) -> None:
+        self.music.play(self.music_track())
+        self.music.update(dt)
+        if self.screen_name == "intro":
+            self.intro_t += dt
+            if self.intro_t >= INTRO_DURATION:
+                self.go_menu()
+            return
+        if self.screen_name in ("menu", "help"):
+            self.menu_t += dt
         if self.screen_name != "game" or self.paused:
             return
         self.anim.update(dt)
@@ -404,10 +428,12 @@ class App:
 
     def draw(self) -> None:
         self.screen.fill(T.BG)
-        if self.screen_name == "menu":
+        if self.screen_name == "intro":
+            self.screens.draw_intro(self.screen, self.intro_t)
+        elif self.screen_name == "menu":
             note = "" if self._boss_mode_selectable() else \
                 "Боссын AI (ai/) хараахан суугаагүй — түр босс тоглоно"
-            self.screens.draw_menu(self.screen, self.main_menu, self.mouse_pos, note)
+            self.screens.draw_menu(self.screen, self.main_menu, self.mouse_pos, note, self.menu_t)
         elif self.screen_name == "help":
             self.screens.draw_help(self.screen)
         elif self.screen_name == "result":
@@ -457,6 +483,7 @@ def main(argv=None) -> int:
                    help="боссын AI-ийн горим (ai/ суусан үед)")
     p.add_argument("--placeholder-boss", action="store_true",
                    help="ai/ байсан ч түр боссыг ашиглах")
+    p.add_argument("--skip-intro", action="store_true", help="эхлэлийн дүр зургийг алгасах")
     p.add_argument("--skip-menu", action="store_true", help="цэсгүйгээр шууд тоглоом эхлүүлэх")
     p.add_argument("--frames", type=int, default=None, help=argparse.SUPPRESS)
     args = p.parse_args(argv)
@@ -464,7 +491,8 @@ def main(argv=None) -> int:
     boss = PlaceholderBoss(seed=args.seed) if args.placeholder_boss else None
     app = App(GameSession(human_side=HEROES), boss=boss, fps=args.fps,
               boss_factory=lambda mode: make_boss(mode=mode, seed=args.seed),
-              boss_mode=args.boss_mode, start_screen="game" if args.skip_menu else "menu")
+              boss_mode=args.boss_mode,
+              start_screen="game" if args.skip_menu else ("menu" if args.skip_intro else "intro"))
     app.run(max_frames=args.frames)
     return 0
 

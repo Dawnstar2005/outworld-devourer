@@ -32,7 +32,7 @@ def fresh():
 
 def test_logic_modules_do_not_import_pygame():
     code = ("import sys; import game.input, game.session, game.boss_driver, game.anim, "
-            "game.labels, game.layout, game.stats, game.menu, game.sound; "
+            "game.labels, game.layout, game.stats, game.menu, game.sound, game.music; "
             "print('pygame' in sys.modules)")
     out = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, check=True)
     assert out.stdout.strip() == "False"

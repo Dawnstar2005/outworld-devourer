@@ -383,3 +383,61 @@ def test_ui_sounds_follow_selection(app, monkeypatch):
     click(app, layout.cell_center((4, 1)))                         # Сэлэм
     assert played[:4] == ["select", "tick", "error", "tick"]
     assert "slash" in played and "step" in played
+
+
+# ---------------------------------------------------------------- эхлэлийн дүр зураг, хөгжим
+
+def test_intro_skip_and_auto_advance(monkeypatch):
+    from game.boss_driver import PlaceholderBoss
+    from game.screens import INTRO_DURATION, TITLE_IN
+    app = make_app(monkeypatch, boss=PlaceholderBoss(seed=0), start_screen="intro")
+    for t in (0.0, 1.5, 5.0, TITLE_IN + 2.0):                     # мөрүүд, гарчиг, сануулга
+        app.intro_t = t
+        app.draw()
+    key(app, pygame.K_m)                                           # дуу унтраах нь алгасахгүй
+    assert app.screen_name == "intro"
+    key(app, pygame.K_SPACE)
+    assert app.screen_name == "menu"
+    pygame.quit()
+    app = make_app(monkeypatch, boss=PlaceholderBoss(seed=0), start_screen="intro")
+    for _ in range(int(INTRO_DURATION / 0.5) + 2):
+        app.update(0.5)
+    assert app.screen_name == "menu"
+    pygame.quit()
+
+
+def test_music_track_follows_screen(app):
+    app.screen_name = "intro"
+    assert app.music_track() == "title"
+    app.go_menu()
+    assert app.music_track() == "title"
+    app.help_return, app.screen_name = "menu", "help"
+    assert app.music_track() == "title"
+    app.start_game()
+    assert app.music_track() == "battle"
+    key(app, pygame.K_ESCAPE)                                      # түр зогсолт
+    assert app.paused and app.music_track() == "battle"
+    app.help_return, app.screen_name = "pause", "help"
+    assert app.music_track() == "battle"
+    app.screen_name = "result"
+    assert app.music_track() is None                               # jingle сонсогдоно
+
+
+def test_music_player_safe_without_files(app, tmp_path):
+    from game.music import MusicPlayer
+    off = MusicPlayer(enabled=False)
+    off.play("title")
+    off.update(1.0)
+    assert not off.ok and off.current is None
+    empty = MusicPlayer(folder=tmp_path)                           # файлгүй хавтас
+    assert empty.ok and not empty.available("title")
+    empty.play("title")
+    empty.update(0.1)
+    assert empty.current == "title"                                # чимээгүй, алдаагүй
+    empty.play(None)
+    empty.update(0.1)
+    assert empty.current is None
+    key(app, pygame.K_m)
+    assert app.music.muted
+    key(app, pygame.K_m)
+    assert not app.music.muted
