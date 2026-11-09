@@ -109,6 +109,21 @@ class Text:
             self._cache[key] = surf
         return surf
 
+    def wrap(self, text: str, size: int, width: int, bold: bool = False) -> list:
+        """Текстийг `width` px-д багтаахаар үгээр нь мөр болгон хуваана."""
+        font = self.font(size, bold)
+        lines, line = [], ""
+        for word in text.split():
+            candidate = f"{line} {word}" if line else word
+            if line and font.size(candidate)[0] > width:
+                lines.append(line)
+                line = word
+            else:
+                line = candidate
+        if line:
+            lines.append(line)
+        return lines
+
     def draw(self, target, text, pos, size=20, color=TEXT, bold=False, anchor="topleft"):
         surf = self.render(text, size, color, bold)
         rect = surf.get_rect(**{anchor: (int(pos[0]), int(pos[1]))})

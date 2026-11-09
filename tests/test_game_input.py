@@ -32,7 +32,8 @@ def fresh():
 
 def test_logic_modules_do_not_import_pygame():
     code = ("import sys; import game.input, game.session, game.boss_driver, game.anim, "
-            "game.labels, game.layout; print('pygame' in sys.modules)")
+            "game.labels, game.layout, game.stats, game.menu, game.sound, game.music; "
+            "print('pygame' in sys.modules)")
     out = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, check=True)
     assert out.stdout.strip() == "False"
 
@@ -540,3 +541,106 @@ def test_every_hero_skill_action_reachable_through_selection():
                         got.add(sel.armed_action())
         assert got == wanted, uid
         sel.clear()
+
+
+# ---------------------------------------------------------------- статистик, цэс (11/29)
+
+from game.menu import Menu, MenuItem  # noqa: E402
+from game.stats import MatchStats  # noqa: E402
+
+
+def test_match_stats_counts_from_hook():
+    stats = MatchStats()
+    session = GameSession(on_action=stats.on_action)
+    s = session.state
+    place(s, knight=(2, 3))
+    s.units["imp1"].hp = 15
+    s.units["mage"].hp = 40
+    from engine import SKILLS
+    sword = SKILLS["sword"].power
+    healed = min(SKILLS["heal"].power, s.units["mage"].max_hp - 40)    # тэнцвэрийн утгаас хамааралгүй
+    session.play(Action("knight", (2, 2), "sword", (2, 1), "imp1"))       # Imp 1-ийг ална
+    session.play(Action("healer", s.units["healer"].pos, "heal", s.units["mage"].pos, "mage"))
+    assert stats.damage["knight"] == sword and stats.kills["knight"] == 1  # engine-ийн amount (log-той ижил)
+    assert stats.deaths["imp1"] == 1 and stats.heal["healer"] == healed
+    assert stats.skills["knight"] == 1
+    rows = stats.rows(s)
+    assert [r["side"] for r in rows][:3] == [HEROES] * 3
+    imp = next(r for r in rows if r["uid"] == "imp1")
+    assert not imp["alive"] and imp["deaths"] == 1
+    assert stats.mvp(HEROES, s) == ("healer" if healed > sword else "knight")
+    assert stats.mvp(DEMONS, s) is None
+    stats.reset()
+    assert stats.damage["knight"] == 0 and stats.winner is None
+
+
+def test_match_stats_records_winner():
+    stats = MatchStats()
+    stats.on_action(None, END_TURN, [{"type": "game_over", "winner": DEMONS, "round": 7}])
+    assert stats.winner == DEMONS and stats.rounds == 7
+
+
+def test_menu_navigation_skips_disabled_and_hit_tests():
+    menu = Menu([MenuItem("a", "A"), MenuItem("b", "B", enabled=False), MenuItem("c", "C")],
+                top=100)
+    assert menu.selected == "a"
+    menu.move(1)
+    assert menu.selected == "c"                   # b идэвхгүй тул алгасна
+    menu.move(1)
+    assert menu.selected == "a"
+    menu.move(-1)
+    assert menu.selected == "c"
+    rects = menu.rects(800)
+    bx, by, bw, bh = rects[1]
+    assert menu.click((bx + 5, by + 5), 800) is None          # идэвхгүй товч
+    cx, cy, cw, ch = rects[0]
+    assert menu.click((cx + 5, cy + 5), 800) == "a" and menu.index == 0
+    assert menu.item_at((0, 0), 800) is None
+    first_disabled = Menu([MenuItem("x", "X", enabled=False), MenuItem("y", "Y")], top=0)
+    assert first_disabled.selected == "y"
+
+
+def test_screen_sizes_and_menu_buttons_centered():
+    assert layout.screen_size(False) == (layout.SCREEN_W, layout.SCREEN_H)
+    wide = layout.screen_size(True)
+    assert wide[0] == layout.BOSS_PANEL_X + layout.BOSS_PANEL_W + layout.MARGIN
+    for x, y, w, h in layout.menu_buttons(3, 1000, 50):
+        assert x + w / 2 == 500
+
+
+# ---------------------------------------------------------------- дуу (11/29)
+
+from game.sound import SOUND_FILES, sounds_for_events  # noqa: E402
+
+
+def test_sounds_for_events_mapping():
+    ev = [{"type": "move", "unit": "knight", "from": (3, 6), "to": (3, 5), "leap": False},
+          {"type": "skill", "unit": "knight", "skill": "sword", "target": (3, 4),
+           "target_uid": "imp1"},
+          {"type": "damage", "src": "knight", "dst": "imp1", "amount": 20, "absorbed": 0, "hp": 0},
+          {"type": "death", "unit": "imp1"},
+          {"type": "turn_end", "side": HEROES, "round": 1},
+          {"type": "turn_start", "side": DEMONS, "round": 1}]
+    assert sounds_for_events(ev) == ["step", "slash", "death"]
+    assert sounds_for_events([{"type": "turn_start", "side": HEROES, "round": 2}]) == ["your_turn"]
+    assert sounds_for_events([{"type": "move", "unit": "demon_lord", "from": (4, 1),
+                               "to": (4, 6), "leap": True}]) == ["leap"]
+    over = [{"type": "turn_start", "side": HEROES, "round": 3},
+            {"type": "game_over", "winner": DEMONS, "round": 3}]
+    assert sounds_for_events(over) == ["lose"]
+    assert sounds_for_events([{"type": "game_over", "winner": HEROES, "round": 3}]) == ["win"]
+    two_hits = [{"type": "skill", "unit": "mage", "skill": "fireball", "target": (3, 1),
+                 "target_uid": None}, {"type": "death", "unit": "imp1"},
+                {"type": "death", "unit": "imp2"}]
+    assert sounds_for_events(two_hits) == ["blast", "death"]        # давхардалгүй
+
+
+def test_every_skill_and_sound_has_a_file():
+    import os
+    from engine import SKILLS
+    from game.sound import SKILL_SOUNDS
+    folder = os.path.join(os.path.dirname(layout.__file__), "assets", "sounds")
+    for name, file in SOUND_FILES.items():
+        assert os.path.isfile(os.path.join(folder, file)), file
+    assert set(SKILL_SOUNDS) == set(SKILLS) - {"shadow_leap"}       # үсрэлт move event-ээр
+    assert set(SKILL_SOUNDS.values()) <= set(SOUND_FILES)

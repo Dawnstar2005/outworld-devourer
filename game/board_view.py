@@ -1,6 +1,7 @@
 """8×8 талбар, дүр, тодруулга зурах (pygame).
 
-Дүрүүдийг одоохондоо өнгөт дөрвөлжин + үсгээр зурна (11/29-нд Kenney CC0 sprite орно).
+Дүр, шал, мөсөн хана: Kenney CC0 sprite (game/sprites.py). Файл олдохгүй бол өнгөт
+дөрвөлжин + үсгээр зурна.
 Зурах дараалал: талбар → мөсөн хана → гэрэлтэлт → хөдлөх/бай нүд → урьдчилсан харагдац →
 бүдгэрэх дүр → дүр (+ тэмдэг) → очих нүдний сүүдэр → үр нөлөөний тоо → хөвөх тоо.
 
@@ -27,18 +28,27 @@ def target_category(kind) -> str:
 
 
 class BoardView:
-    def __init__(self, text: T.Text):
+    def __init__(self, text: T.Text, sprites=None):
         self.text = text
+        self.sprites = sprites if sprites is not None and sprites.ok else None
         self._board = self._build_board()
         self._overlays = {}
 
     # ---- нэг удаа бэлтгэх surface ----
     def _build_board(self) -> pygame.Surface:
         surf = pygame.Surface((L.BOARD_PX_W, L.BOARD_PX_H))
+        shade = pygame.Surface((L.CELL, L.CELL), pygame.SRCALPHA)
         for x in range(BOARD_W):
             for y in range(BOARD_H):
-                color = T.CELL_LIGHT if (x + y) % 2 == 0 else T.CELL_DARK
-                pygame.draw.rect(surf, color, (x * L.CELL, y * L.CELL, L.CELL, L.CELL))
+                rect = (x * L.CELL, y * L.CELL, L.CELL, L.CELL)
+                tile = self.sprites.floor(x, y) if self.sprites else None
+                if tile is not None:   # Kenney шал + тодруулга харагдахуйц бараан давхарга
+                    surf.blit(tile, rect[:2])
+                    shade.fill((10, 10, 20, 120 if (x + y) % 2 == 0 else 150))
+                    surf.blit(shade, rect[:2])
+                else:
+                    color = T.CELL_LIGHT if (x + y) % 2 == 0 else T.CELL_DARK
+                    pygame.draw.rect(surf, color, rect)
         for i in range(BOARD_W + 1):
             pygame.draw.line(surf, T.GRID_LINE, (i * L.CELL, 0), (i * L.CELL, L.BOARD_PX_H))
         for i in range(BOARD_H + 1):
@@ -168,10 +178,16 @@ class BoardView:
             x, y, w, h = L.cell_rect(cell)
             tile = pygame.Surface((w - 8, h - 8), pygame.SRCALPHA)
             r = tile.get_rect()
-            pygame.draw.rect(tile, T.WALL, r, border_radius=4)
-            pygame.draw.rect(tile, (230, 250, 255), r, 2, border_radius=4)
+            if self.sprites and self.sprites.wall is not None:
+                tile.blit(self.sprites.wall, (0, 0))
+                pygame.draw.rect(tile, (230, 250, 255), r, 2, border_radius=2)
+            else:
+                pygame.draw.rect(tile, T.WALL, r, border_radius=4)
+                pygame.draw.rect(tile, (230, 250, 255), r, 2, border_radius=4)
             if turns != "":
-                lbl = self.text.render(str(turns), 22, (40, 80, 110), bold=True)
+                lbl = self.text.render(str(turns), 22, (20, 50, 80), bold=True)
+                bg = lbl.get_rect(center=r.center).inflate(8, 2)
+                pygame.draw.rect(tile, (220, 240, 255), bg, border_radius=4)
                 tile.blit(lbl, lbl.get_rect(center=r.center))
             if alpha < 1.0:
                 tile.set_alpha(int(255 * alpha))
@@ -215,15 +231,25 @@ class BoardView:
         if acted:
             color = T.dim(color)
         box = pygame.Surface((size, size), pygame.SRCALPHA)
-        pygame.draw.rect(box, color, (0, 0, size, size), border_radius=10)
-        pygame.draw.rect(box, T.dim(color, 0.6) if not acted else (40, 40, 50),
-                         (0, 0, size, size), 2, border_radius=10)
-        letter = T.UNIT_LETTERS[kind]
-        if kind == "imp" and uid[3:].isdigit():
-            letter += uid[3:]
-        lbl = self.text.render(letter, 34 if kind != "imp" else 28,
-                               (255, 255, 255) if not acted else (150, 150, 160), bold=True)
-        box.blit(lbl, lbl.get_rect(center=(size // 2, size // 2 - 4)))
+        sprite = self.sprites.unit(kind, dim=acted) if self.sprites else None
+        if sprite is not None:
+            # багийн өнгөтэй тавцан + Kenney sprite
+            pygame.draw.rect(box, color + (95,), (0, 0, size, size), border_radius=10)
+            pygame.draw.rect(box, color, (0, 0, size, size), 2, border_radius=10)
+            box.blit(sprite, sprite.get_rect(center=(size // 2, size // 2 - 4)))
+            if kind == "imp" and uid[3:].isdigit():
+                num = self.text.render(uid[3:], 15, (255, 255, 255), bold=True)
+                box.blit(num, (4, 2))
+        else:
+            pygame.draw.rect(box, color, (0, 0, size, size), border_radius=10)
+            pygame.draw.rect(box, T.dim(color, 0.6) if not acted else (40, 40, 50),
+                             (0, 0, size, size), 2, border_radius=10)
+            letter = T.UNIT_LETTERS[kind]
+            if kind == "imp" and uid[3:].isdigit():
+                letter += uid[3:]
+            lbl = self.text.render(letter, 34 if kind != "imp" else 28,
+                                   (255, 255, 255) if not acted else (150, 150, 160), bold=True)
+            box.blit(lbl, lbl.get_rect(center=(size // 2, size // 2 - 4)))
         # HP мөр
         bar_w = size - 10
         bar = pygame.Rect(5, size - HP_BAR_H - 5, bar_w, HP_BAR_H)
