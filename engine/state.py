@@ -58,7 +58,10 @@ END_TURN = Action(unit="")
 
 class Unit:
     __slots__ = ("uid", "kind", "side", "hp", "max_hp", "x", "y", "move", "cooldowns",
-                 "shield", "cursed", "taunted_by", "taunt_turns", "acted", "alive")
+                 "shield", "cursed", "taunted_by", "taunt_turns", "acted", "alive",
+                 "power_mult", "level")
+    # Хуучин log/save-д байхгүй байж болох талбарууд ба default утга
+    _DEFAULTS = {"power_mult": 1.0, "level": 1}
 
     def __init__(self, uid: str, kind: str, pos: Cell):
         t = UNIT_TYPES[kind]
@@ -77,6 +80,8 @@ class Unit:
         self.taunt_turns = 0
         self.acted = False
         self.alive = True
+        self.power_mult = 1.0    # хохирол / эдгээлт / бамбайн үржвэр (level, item, давхрын хүч)
+        self.level = 1
 
     @property
     def pos(self) -> Cell:
@@ -94,6 +99,7 @@ class Unit:
         u.shield, u.cursed = self.shield, self.cursed
         u.taunted_by, u.taunt_turns = self.taunted_by, self.taunt_turns
         u.acted, u.alive = self.acted, self.alive
+        u.power_mult, u.level = self.power_mult, self.level
         return u
 
     def to_dict(self) -> dict:
@@ -103,7 +109,7 @@ class Unit:
     def from_dict(d: dict) -> "Unit":
         u = Unit.__new__(Unit)
         for s in Unit.__slots__:
-            setattr(u, s, d[s])
+            setattr(u, s, d[s] if s in d else Unit._DEFAULTS[s])
         u.cooldowns = dict(d["cooldowns"])
         return u
 
@@ -112,33 +118,44 @@ class Unit:
 
 
 class GameState:
-    __slots__ = ("units", "walls", "side_to_act", "round", "winner")
+    __slots__ = ("units", "walls", "side_to_act", "round", "winner", "obstacles")
 
     def __init__(self):
         self.units: dict[str, Unit] = {}
         self.walls: dict[Cell, int] = {}   # нүд -> үлдсэн ээлж
+        self.obstacles: set = set()        # байнгын саад (чулуу, багана) — хөдөлгөөнийг хаана
         self.side_to_act = HEROES
         self.round = 1
         self.winner: Optional[str] = None  # HEROES | DEMONS | "draw" | None
 
     # ---- үүсгэх, хуулах ----
     @staticmethod
-    def new_game() -> "GameState":
+    def new_game(encounter: Optional[dict] = None) -> "GameState":
+        """Эхлэх төлөв. encounter=None бол анхны тулаан (Demon Lord + 2 Imp).
+
+        encounter = {"units": {uid: (kind, (x, y)), ...}, "obstacles": [(x, y), ...]}
+        (engine/dungeon.py-ийн stage_encounter() үүсгэнэ).
+        """
         s = GameState()
-        for uid, (kind, pos) in START_POSITIONS.items():
-            s.units[uid] = Unit(uid, kind, pos)
+        units = START_POSITIONS if encounter is None else encounter["units"]
+        for uid, (kind, pos) in units.items():
+            s.units[uid] = Unit(uid, kind, tuple(pos))
+        if encounter is not None:
+            s.obstacles = {tuple(c) for c in encounter.get("obstacles", ())}
         return s
 
     def clone(self) -> "GameState":
         s = GameState.__new__(GameState)
         s.units = {k: u.copy() for k, u in self.units.items()}
         s.walls = dict(self.walls)
+        s.obstacles = self.obstacles      # тулааны дунд өөрчлөгддөггүй тул хуваалцана
         s.side_to_act, s.round, s.winner = self.side_to_act, self.round, self.winner
         return s
 
     def to_dict(self) -> dict:
         return {"units": [u.to_dict() for u in self.units.values()],
                 "walls": [[x, y, t] for (x, y), t in self.walls.items()],
+                "obstacles": [[x, y] for x, y in sorted(self.obstacles)],
                 "side_to_act": self.side_to_act, "round": self.round, "winner": self.winner}
 
     @staticmethod
@@ -148,6 +165,7 @@ class GameState:
             u = Unit.from_dict(ud)
             s.units[u.uid] = u
         s.walls = {(x, y): t for x, y, t in d["walls"]}
+        s.obstacles = {(x, y) for x, y in d.get("obstacles", [])}
         s.side_to_act, s.round, s.winner = d["side_to_act"], d["round"], d["winner"]
         return s
 
@@ -157,13 +175,20 @@ class GameState:
         return self.winner is not None
 
     @property
-    def boss(self) -> Unit:
-        return self.units["demon_lord"]
+    def boss(self) -> Optional[Unit]:
+        """Давхрын босс (UnitType.boss) — анхны тулаанд Demon Lord. Жижиг мангасын үед None."""
+        u = self.units.get("demon_lord")
+        if u is not None:
+            return u
+        for u in self.units.values():
+            if u.type.boss:
+                return u
+        return None
 
     @property
     def boss_enraged(self) -> bool:
         b = self.boss
-        return b.alive and b.hp < b.max_hp * ENRAGE_THRESHOLD
+        return b is not None and b.alive and b.hp < b.max_hp * ENRAGE_THRESHOLD
 
     def alive_units(self, side: Optional[str] = None):
         return [u for u in self.units.values() if u.alive and (side is None or u.side == side)]
@@ -175,9 +200,10 @@ class GameState:
         return None
 
     def blocked_cells(self) -> set:
-        """Дүр эсвэл мөсөн хана байгаа нүднүүд."""
+        """Дүр, мөсөн хана эсвэл саад байгаа нүднүүд."""
         b = {u.pos for u in self.units.values() if u.alive}
         b.update(self.walls.keys())
+        b.update(self.obstacles)
         return b
 
     @staticmethod
@@ -188,10 +214,12 @@ class GameState:
         """Debug-д зориулсан текст зураг."""
         sym = {"knight": "K", "mage": "M", "healer": "H", "demon_lord": "D", "imp": "i"}
         grid = [["." for _ in range(BOARD_W)] for _ in range(BOARD_H)]
+        for (x, y) in self.obstacles:
+            grid[y][x] = "o"
         for (x, y) in self.walls:
             grid[y][x] = "#"
         for u in self.alive_units():
-            grid[u.y][u.x] = sym[u.kind]
+            grid[u.y][u.x] = sym.get(u.kind, "B" if u.type.boss else "e")
         lines = ["  " + " ".join(str(i) for i in range(BOARD_W))]
         lines += [f"{y} " + " ".join(row) for y, row in enumerate(grid)]
         lines.append(f"round {self.round}, {self.side_to_act} to act"
