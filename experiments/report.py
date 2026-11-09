@@ -14,7 +14,8 @@ from .runner import BALANCE_VARIANTS
 
 BOT_LABELS = {"random": "Санамсаргүй", "greedy": "Тэнцвэртэй (greedy)",
               "healer_reliant": "Healer-т найддаг", "mage_reliant": "Mage-т найддаг",
-              "aggressive": "Түрэмгий", "cautious": "Болгоомжтой"}
+              "aggressive": "Түрэмгий", "cautious": "Болгоомжтой",
+              "human": "Хүн (leave-one-game-out)"}
 TARGET_HERO_WIN = (0.35, 0.60)    # жишээ зорилт: баатрууд 35–60% ялах (PM шийднэ)
 
 
@@ -96,8 +97,48 @@ def _bot_table(rows: list) -> list:
     return lines
 
 
+def predictor_section(pred: dict) -> list:
+    """4-р хэсэг: дараагийн нүүдэл таамаглагч (PDF-ийн шаардлага 4: top-3 ≥ 60%)."""
+    L = ["## 4. Дараагийн нүүдэл таамаглагч (`learning/predictor.py`)", "",
+         f"Анги = (ур чадвар, бай). Bot бүрийн {pred['games_per_bot']} тулааны log-ийн эхний 70%-иар "
+         "сургаж, үлдсэн 30%-иар хэмжсэн. «Санамсаргүй» — боломжит ангиас санамсаргүй тааварласан "
+         "бол хүлээгдэх хувь, «Heuristic» — сургаагүй загвар (зөвхөн шууд үр ашиг).", "",
+         "| Бүлэг | Тест шийдвэр | Анги/шийдвэр | Санамсаргүй top-1 / top-3 | Heuristic top-1 / top-3 "
+         "| **Сургасан top-1 / top-3** |",
+         "|---|---|---|---|---|---|"]
+    for r in pred["rows"]:
+        name = BOT_LABELS.get(r["group"], r["group"])
+        if r["group"] == "all_bots":
+            name = "**Бүх bot нийлсэн**"
+        L.append(f"| {name} | {r['decisions']} | {r['classes']:.1f} | {_pct(r['chance1'])} / "
+                 f"{_pct(r['chance3'])} | {_pct(r['heur1'])} / {_pct(r['heur3'])} | "
+                 f"**{_pct(r['top1'])} / {_pct(r['top3'])}** |")
+    t = pred["timing"]
+    human = [r for r in pred["rows"] if r["group"].startswith("human")]
+    allb = next((r for r in pred["rows"] if r["group"] == "all_bots"), pred["rows"][0])
+    ok3 = all(r["top3"] >= 0.6 for r in pred["rows"])
+    L += ["", f"- **Хурд:** MCTS-ийн rollout-ийнх шиг 6 нүдний түүвэр (дунджаар {t['cands']:.0f} "
+              f"нүүдэл) дээр `predict()` — median **{t['median_ms']:.3f} мс**, p95 "
+              f"{t['p95_ms']:.3f} мс (шаардлага ≤ 0.2 мс).",
+          f"- **Шалгуур (top-3 ≥ 60%)**: {'бүх бүлэгт хангасан' if ok3 else 'зарим бүлэгт хангаагүй'}. "
+          f"⚠️ Гэхдээ (ур чадвар, бай) гэсэн ангиар шийдвэр бүрт дунджаар {allb['classes']:.1f} "
+          f"л анги байдаг (Галт бөмбөгийн бүх бай, хөдөлгөөний бүх нүд нэг анги) тул санамсаргүй "
+          f"таавар ч top-3-т {_pct(allb['chance3'])} хүрдэг — энэ шалгуур бараг автоматаар хангагдана. "
+          f"Бодит ялгааг top-1 харуулна: санамсаргүй {_pct(allb['chance1'])} → heuristic "
+          f"{_pct(allb['heur1'])} → сургасан **{_pct(allb['top1'])}** (бүх bot нийлсэн)."]
+    if human:
+        h = human[0]
+        L.append(f"- **Хүний log** (`{pred['human_logs']}`, {h['train_games'] + 1} тоглолт, "
+                 f"leave-one-game-out): top-1 {_pct(h['top1'])}, top-3 {_pct(h['top3'])} — "
+                 "тоглолт цөөн тул итгэл бага; тоглох тусам нэмэгдэнэ.")
+    else:
+        L.append(f"- Хүний log (`{pred['human_logs']}`) 2-оос цөөн тоглолттой тул хэмжээгүй.")
+    L.append("")
+    return L
+
+
 def markdown_report(meta: dict, base_rows: list, ab_rows: list, profiles: dict,
-                    balance_rows: list, balance_applied: dict) -> str:
+                    balance_rows: list, balance_applied: dict, predictor: dict | None = None) -> str:
     L = [f"# Туршилтын тайлан — {meta.get('date', '')}", "",
          f"Босс: **{meta.get('boss')}** · тулаан бүрийн seed тогтмол (давтагдана) · "
          f"bot-ууд: {', '.join(BOT_LABELS.get(b, b) for b in meta.get('bots', []))}.",
@@ -174,6 +215,8 @@ def markdown_report(meta: dict, base_rows: list, ab_rows: list, profiles: dict,
         L.append("- Анхааруулга: зөвхөн боссын HP эсвэл зөвхөн Хар дөлийг багасгах нь хангалтгүй "
                  "(≤2%) — баатруудын амьд үлдэх чадвар ба боссын HP-ийг хамт өөрчлөх шаардлагатай.")
         L.append("- Эцсийн утгыг PM шийднэ (`engine/constants.py`); хүн тоглогчоор давхар шалгах нь зүйтэй.")
+    if predictor:
+        L += [""] + predictor_section(predictor)
     return "\n".join(L) + "\n"
 
 
