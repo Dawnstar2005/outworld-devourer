@@ -68,8 +68,56 @@ UNIT_COLORS = {
     "healer": (46, 184, 114),
     "demon_lord": (200, 40, 55),
     "imp": (225, 115, 45),
+    "slime": (90, 200, 80),
+    "slime_king": (210, 190, 60),
+    "goblin": (130, 160, 60),
+    "goblin_king": (170, 120, 40),
+    "low_vampire": (150, 60, 110),
+    "vampire_lord": (120, 40, 150),
+    "demon": (210, 80, 70),
+    "legion_commander": (190, 50, 40),
+    "hell_demon": (240, 100, 30),
 }
-UNIT_LETTERS = {"knight": "K", "mage": "M", "healer": "H", "demon_lord": "D", "imp": "i"}
+UNIT_LETTERS = {"knight": "K", "mage": "M", "healer": "H", "demon_lord": "D", "imp": "i",
+                "slime": "s", "slime_king": "S", "goblin": "g", "goblin_king": "G",
+                "low_vampire": "v", "vampire_lord": "V", "demon": "d", "legion_commander": "L",
+                "hell_demon": "h"}
+
+SIDE_RING_HERO = (90, 150, 255)       # баатрын суурийн цагираг
+SIDE_RING_ENEMY = (235, 80, 80)       # дайсны суурийн цагираг
+BOSS_RING = (255, 210, 80)            # босс — алтан цагираг
+_FALLBACK_HERO = (66, 135, 245)
+_FALLBACK_ENEMY = (200, 60, 60)
+
+
+def _is_hero(kind) -> bool:
+    from engine.constants import HEROES, UNIT_TYPES
+    t = UNIT_TYPES.get(kind)
+    return t is None or t.side == HEROES
+
+
+def is_boss(kind) -> bool:
+    from engine.constants import UNIT_TYPES
+    t = UNIT_TYPES.get(kind)
+    return bool(t is not None and t.boss)
+
+
+def unit_color(kind):
+    """Дүрийн үндсэн өнгө; үл мэдэгдэх kind-д талын өнгө."""
+    c = UNIT_COLORS.get(kind)
+    if c is not None:
+        return c
+    return _FALLBACK_HERO if _is_hero(kind) else _FALLBACK_ENEMY
+
+
+def unit_letter(kind) -> str:
+    return UNIT_LETTERS.get(kind) or (str(kind)[:1].upper() if kind else "?")
+
+
+def side_ring_color(kind):
+    if is_boss(kind):
+        return BOSS_RING
+    return SIDE_RING_HERO if _is_hero(kind) else SIDE_RING_ENEMY
 
 
 def dim(color, k=0.45):
