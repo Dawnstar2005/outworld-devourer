@@ -6,20 +6,25 @@ from typing import Optional
 
 from engine import DEMONS, HEROES, SKILLS, UNIT_TYPES, GameState
 
-TURN_NAMES = {HEROES: "Баатруудын ээлж", DEMONS: "Боссын ээлж"}
-WINNER_NAMES = {HEROES: "Ялалт! Баатрууд яллаа", DEMONS: "Ялагдал. Босс яллаа", "draw": "Тэнцээ"}
+TURN_NAMES = {HEROES: "Баатруудын ээлж", DEMONS: "Дайсны ээлж"}
+WINNER_NAMES = {HEROES: "Ялалт! Баатрууд яллаа", DEMONS: "Ялагдал. Дайсан яллаа", "draw": "Тэнцээ"}
+
+
+def _split_uid(uid: str) -> tuple:
+    """"slime2" → ("slime", "2"), "demon_lord" → ("demon_lord", "")."""
+    base = uid.rstrip("0123456789")
+    return base, uid[len(base):]
 
 
 def unit_name(uid: str, state: Optional[GameState] = None) -> str:
-    """"imp1" → "Imp 1", "demon_lord" → "Demon Lord"."""
+    """"imp1" → "Imp 1", "slime2" → "Slime 2", "demon_lord" → "Demon Lord"."""
     u = state.units.get(uid) if state is not None else None
-    kind = u.kind if u is not None else ("imp" if uid.startswith("imp") else uid)
+    base, num = _split_uid(uid)
+    kind = u.kind if u is not None else base
     t = UNIT_TYPES.get(kind)
     if t is None:
         return uid
-    if kind == "imp" and uid[3:].isdigit():
-        return f"{t.name} {uid[3:]}"
-    return t.name
+    return f"{t.name} {num}" if num else t.name
 
 
 def skill_name(sid: str) -> str:
