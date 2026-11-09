@@ -1,7 +1,7 @@
 """Үндсэн давталт (pygame): оролт → нүүдэл → анимаци → зурах, 60 FPS.
 
 Дэлгэц: "intro" (эхлэлийн дүр зураг) → "menu" (үндсэн цэс) → "game" (тоглоом, Esc-ээр
-түр зогсоно) → "result" (үр дүн). Хөгжим: эхлэл/цэс — "title", тулаан — "battle".
+түр зогсоно) → "result" (үр дүн). Дэлгэц бүр өөрийн хөгжимтэй (music_track()).
 "help" (удирдлага) цэс болон түр зогсолтоос нээгдэнэ. Tab — «Боссын бодол» самбар.
 
 Хүний нүүдэл: хулгана/товчлуур → Selection → GameSession.play()
@@ -394,11 +394,13 @@ class App:
         return ""
 
     def music_track(self):
-        """Одоогийн дэлгэцэд тохирох хөгжим (None — хөгжимгүй, үр дүнд jingle сонсогдоно)."""
+        """Одоогийн дэлгэцэд тохирох хөгжим. Тоглолт дуусах агшинд None — jingle сонсогдоно."""
         name = self.screen_name
         if name == "help":
             name = "game" if self.help_return == "pause" else "menu"
-        return {"intro": "title", "menu": "title", "game": "battle"}.get(name)
+        if name == "game" and self.state.is_over:
+            return None
+        return {"intro": "intro", "menu": "title", "game": "battle", "result": "result"}.get(name)
 
     def update(self, dt: float) -> None:
         self.music.play(self.music_track())

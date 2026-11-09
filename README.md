@@ -31,7 +31,8 @@ python -m pytest -q
 ## Тоглоом ажиллуулах (`game/`)
 
 ```bash
-python -m game                      # үндсэн цэснээс эхэлнэ, 60 FPS
+python -m game                      # эхлэлийн дүр зураг → үндсэн цэс, 60 FPS
+python -m game --skip-intro         # эхлэлийн дүр зураггүй
 python -m game --skip-menu          # шууд тоглоом
 python -m game --boss-mode mcts     # боссын AI-г MCTS горимоор (ai/ суусан үед; цэснээс ч сольж болно)
 python -m game --placeholder-boss   # ai/ байсан ч түр боссоор тоглох
@@ -66,7 +67,9 @@ python -m game --placeholder-boss   # ai/ байсан ч түр боссоор 
 Түр босс ажиллаж байхад «AI холбогдоогүй» гэсэн тайлбар гарна.
 
 Sprite, дуу: [Kenney](https://www.kenney.nl)-ийн CC0 багц (Tiny Dungeon, RPG Audio, Interface Sounds,
-Music Jingles) — `game/assets/`, эх файл бүрийн жагсаалт `game/assets/CREDITS.md`-д. Файл олдохгүй
+Music Jingles). Хөгжим: OpenGameArt-ийн CC0 — эхлэл (Vampire's Piano, TAD), цэс (Dark Forest Theme,
+cynicmusic), тулаан (Battle Theme A, cynicmusic), үр дүн (Cold Silence, Eponasoft).
+Бүгд `game/assets/`-д, эх файл бүрийн жагсаалт `game/assets/CREDITS.md`-д. Файл олдохгүй
 эсвэл audio төхөөрөмж байхгүй бол тоглоом өнгөт дөрвөлжин, дуугүйгээр үргэлжилнэ.
 
 Сонголтын логик (`game/input.py`), session (`game/session.py`), боссын thread зэрэг нь pygame-гүй,

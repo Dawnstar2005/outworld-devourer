@@ -408,7 +408,7 @@ def test_intro_skip_and_auto_advance(monkeypatch):
 
 def test_music_track_follows_screen(app):
     app.screen_name = "intro"
-    assert app.music_track() == "title"
+    assert app.music_track() == "intro"
     app.go_menu()
     assert app.music_track() == "title"
     app.help_return, app.screen_name = "menu", "help"
@@ -419,8 +419,12 @@ def test_music_track_follows_screen(app):
     assert app.paused and app.music_track() == "battle"
     app.help_return, app.screen_name = "pause", "help"
     assert app.music_track() == "battle"
-    app.screen_name = "result"
+    app.paused = False
+    app.screen_name = "game"
+    app.state.winner = "heroes"
     assert app.music_track() is None                               # jingle сонсогдоно
+    app.screen_name = "result"
+    assert app.music_track() == "result"
 
 
 def test_music_player_safe_without_files(app, tmp_path):
@@ -429,6 +433,7 @@ def test_music_player_safe_without_files(app, tmp_path):
     off.play("title")
     off.update(1.0)
     assert not off.ok and off.current is None
+    assert all(app.music.available(t) for t in ("intro", "title", "battle", "result"))
     empty = MusicPlayer(folder=tmp_path)                           # файлгүй хавтас
     assert empty.ok and not empty.available("title")
     empty.play("title")

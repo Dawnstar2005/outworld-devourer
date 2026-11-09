@@ -1,4 +1,5 @@
-"""Арын хөгжим: эхлэл/цэс — "title", тулаан — "battle" (pygame.mixer.music, stream).
+"""Арын хөгжим (pygame.mixer.music, stream): эхлэл — "intro", цэс — "title",
+тулаан — "battle", үр дүн — "result".
 
 Дэлгэц солигдоход хуучин хөгжмийг зөөлөн намсгаад (fade out) шинийг эхлүүлнэ — үндсэн
 давталтыг хүлээлгэхгүйн тулд `update(dt)` дотор кадр бүрт бага багаар хийнэ.
@@ -10,7 +11,8 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Optional
 
-MUSIC_TRACKS = {"title": "title.mp3", "battle": "battle.mp3"}
+MUSIC_TRACKS = {"intro": "intro.mp3", "title": "title.mp3", "battle": "battle.mp3",
+                "result": "result.ogg"}
 MUSIC_VOLUME = 0.45
 FADE_OUT = 0.8          # сек
 FADE_IN_MS = 1500

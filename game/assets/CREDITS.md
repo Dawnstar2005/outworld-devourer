@@ -1,6 +1,7 @@
 # Ассетын эх сурвалж
 
-Бүх файл [Kenney](https://www.kenney.nl)-ийн **CC0 1.0** (Creative Commons Zero) лицензтэй багцаас авсан.
+Sprite, дууны эффект [Kenney](https://www.kenney.nl)-ийн, хөгжим [OpenGameArt](https://opengameart.org)-ийн
+**CC0 1.0** (Creative Commons Zero) лицензтэй бүтээл.
 Хувийн, сургалтын, арилжааны төсөлд чөлөөтэй ашиглаж болно. Нэр дурдах нь заавал биш, гэхдээ бид дурдаж байна.
 Лицензийн эх бичвэр: `LICENSE-kenney.txt`. Татсан огноо: 2026-11-09.
 
@@ -40,6 +41,18 @@
 | `sounds/win.ogg` | [Music Jingles](https://kenney.nl/assets/music-jingles) | `8-Bit jingles/jingles_NES12.ogg` |
 | `sounds/lose.ogg` | Music Jingles | `8-Bit jingles/jingles_NES11.ogg` |
 | `sounds/your_turn.ogg` | Music Jingles | `8-Bit jingles/jingles_NES09.ogg` |
+
+## Хөгжим — [OpenGameArt](https://opengameart.org), CC0
+
+| Файл | Хаана | Нэр | Зохиолч | Эх файл |
+|---|---|---|---|---|
+| `music/intro.mp3` | Эхлэлийн дүр зураг | [Vampire's Piano](https://opengameart.org/content/vampires-piano) | TAD | `vampires_piano_6.mp3` |
+| `music/title.mp3` | Үндсэн цэс | [Dark Forest Theme](https://opengameart.org/content/dark-forest-theme) | cynicmusic | `GameMusic_ForestTheme_24_0.mp3` |
+| `music/battle.mp3` | Тулаан | [Battle Theme A](https://opengameart.org/content/battle-theme-a) | cynicmusic | `battleThemeA.mp3` |
+| `music/result.ogg` | Үр дүнгийн дэлгэц | [Cold Silence](https://opengameart.org/content/cold-silence) | Eponasoft | `cold_silence.ogg` |
+
+Бүгд OpenGameArt дээр CC0 лицензтэй гэж тэмдэглэгдсэн (2026-11-09-нд шалгав). Хөгжим солих бол
+`game/music.py`-ийн `MUSIC_TRACKS`-ийг засна.
 
 Ялалт/ялагдлын jingle-ийг аялгууны чиглэлээр (өгсөх / уруудах) сонгосон. Дууг солих бол
 `game/sound.py`-ийн `SOUND_FILES`-ийг засна.
