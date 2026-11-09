@@ -12,7 +12,7 @@ from .labels import WINNER_NAMES, unit_name
 
 # Эхлэлийн дүр зураг: мөр бүр ээлжлэн тодорно, дараа нь гарчиг. Дурын товч — алгасах.
 INTRO_LINES = [
-    "Эрт урьдын цагт гурван баатар Outwold-ын хаалгыг битүүмжилжээ.",
+    "Эрт урьдын цагт гурван баатар Outworld-ын хаалгыг битүүмжилжээ.",
     "Мянган жил өнгөрч, битүүмжлэл сулрахад Demon Lord сэрлээ.",
     "Тэр тулаан бүрээс суралцаж, дайснаа таньж, улам хүчирхэгжинэ.",
     "Knight, Mage, Healer — хаалганы сүүлчийн хамгаалагчид дахин нэгдэв.",
@@ -120,7 +120,7 @@ class Screens:
             y += 44
         ta = _ramp(t, TITLE_IN, 1.6)
         if ta > 0:
-            self._glow_title(surf, "Outwold devourer", (w // 2, h // 2 - 20), 84, ta)
+            self._glow_title(surf, "Outworld Devourer", (w // 2, h // 2 - 20), 84, ta)
             sub = self.text.render("Тоглогчийн зуршлыг сурдаг AI босс", 22, T.TEXT_DIM).copy()
             sub.set_alpha(int(255 * ta))
             surf.blit(sub, sub.get_rect(center=(w // 2, h // 2 + 40)))
@@ -181,7 +181,7 @@ class Screens:
         self._embers(surf, t, strength=0.6)
         self._draw_vignette(surf)
         cx = w // 2
-        self._glow_title(surf, "Outwold devourer", (cx, 110), 76)
+        self._glow_title(surf, "Outworld Devourer", (cx, 110), 76)
         self.text.draw(surf, "Тоглогчийн зуршлыг сурдаг AI босстой ээлжит тактик тоглоом",
                        (cx, 162), 22, T.TEXT_DIM, anchor="center")
         self._unit_row(surf, cx, 192)

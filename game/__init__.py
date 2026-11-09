@@ -1,4 +1,4 @@
-"""Outwold devourer — Pygame тоглоом (GD).
+"""Outworld Devourer — Pygame тоглоом (GD).
 
 Ажиллуулах:  python -m game
 
