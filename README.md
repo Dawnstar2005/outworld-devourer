@@ -75,7 +75,7 @@ cynicmusic), тулаан (Battle Theme A, cynicmusic), үр дүн (Cold Silenc
 Сонголтын логик (`game/input.py`), session (`game/session.py`), боссын thread зэрэг нь pygame-гүй,
 `tests/test_game_input.py`-д тестлэгдсэн. `tests/test_game_app.py` нь App-ийг дэлгэцгүй (SDL dummy) ажиллуулна.
 
-### DQ log-д: `on_action` hook
+### `on_action` hook
 Хүний болон боссын нүүдэл бүр `GameSession.play()`-ээр дамждаг, нүүдэл бүрийн дараа hook дуудагдана:
 ```python
 from game.app import App
@@ -86,6 +86,26 @@ def on_action(state_before, action, events):
     ...
 
 App(GameSession(on_action=on_action)).run()   # эсвэл session.add_hook(fn)
+```
+
+## Тоглолтын log (`learning/`)
+
+`python -m game` тоглолт бүрийг `logs/`-д (git-д орохгүй) нэг файл болгон бичнэ. `--log-dir DIR` — өөр хавтас,
+`--no-log` — бичихгүй. Формат нь JSON Lines, мөр бүр нэг объект:
+
+```json
+{"type": "start", "version": 1, "time": "2026-11-09T15:30:12", "human_side": "heroes", "meta": {"boss": "eval"}, "state": {...}}
+{"type": "action", "i": 0, "round": 1, "side": "heroes", "actor": "human", "state": {...нүүдлээс өмнөх...}, "action": {...}, "events": [...]}
+{"type": "end", "winner": "heroes", "rounds": 7, "actions": 58, "reason": "game_over"}
+```
+
+`reason`: `game_over` (дууссан), `restart` (шинээр эхэлсэн), `menu`, `quit` (дуусаагүй). Мөр бүрийг бичмэгц
+flush хийдэг тул тоглоом гэнэт хаагдсан ч бичсэн хэсэг үлдэнэ.
+
+```python
+from learning import iter_logs, read_log, replay_check
+for path, records in iter_logs("logs", finished_only=True):
+    assert replay_check(records)      # log-ийг engine-ээр дахин тоглуулж яг таарч байгааг шалгана
 ```
 
 ## `engine` API (GD, DQ-д зориулав)
