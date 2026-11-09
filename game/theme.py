@@ -45,7 +45,22 @@ BUTTON = (70, 90, 140)
 BUTTON_HOVER = (90, 115, 175)
 BUTTON_OFF = (55, 55, 68)
 
-FLOAT_COLORS = {"damage": (255, 90, 90), "heal": (110, 240, 140), "shield": (130, 200, 255)}
+FLOAT_COLORS = {"damage": (255, 90, 90), "heal": (110, 240, 140), "shield": (130, 200, 255),
+                "skill": (255, 235, 150)}
+
+# Ур чадварын бай: "harm" — дайсанд, "help" — холбоотонд, "wall" — Мөсөн хана
+TARGET_FILL = {"harm": (255, 80, 80, 60), "help": (90, 230, 130, 60), "wall": (150, 220, 250, 60)}
+TARGET_HOVER = {"harm": (255, 90, 90, 150), "help": (100, 240, 140, 150),
+                "wall": (150, 220, 250, 150)}
+AREA_PREVIEW = (255, 120, 60, 110)
+FLASH_COLORS = {"harm": (255, 110, 60), "help": (110, 240, 140), "wall": (150, 220, 250)}
+
+BADGE_SHIELD = (70, 150, 255)
+BADGE_CURSE = (160, 70, 220)
+BADGE_TAUNT = (235, 180, 40)
+PREVIEW_HARM = (255, 110, 110)
+PREVIEW_HELP = (130, 245, 160)
+PREVIEW_STATUS = (250, 220, 120)
 
 UNIT_COLORS = {
     "knight": (66, 135, 245),

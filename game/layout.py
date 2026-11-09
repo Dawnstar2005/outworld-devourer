@@ -30,6 +30,17 @@ BUTTONS = {
     "end_turn": (PANEL_X + _half + BUTTON_GAP, PANEL_Y + PANEL_H - BUTTON_H, _half, BUTTON_H),
 }
 
+# Самбарын хэсгүүд (дээрээс доош): дүрүүд → сонгосон дүр + ур чадварын товч → log → товч
+UNITS_Y = PANEL_Y + 10
+INFO_Y = PANEL_Y + 190
+SKILL_BTN_Y = INFO_Y + 56
+SKILL_BTN_H = 30
+SKILL_BTN_STEP = SKILL_BTN_H + 4
+MAX_SKILLS = 4
+SKILL_BUTTONS = [(PANEL_X + 8, SKILL_BTN_Y + i * SKILL_BTN_STEP, PANEL_W - 16, SKILL_BTN_H)
+                 for i in range(MAX_SKILLS)]
+LOG_Y = SKILL_BTN_Y + MAX_SKILLS * SKILL_BTN_STEP + 6
+
 
 def point_in(rect, pos) -> bool:
     x, y, w, h = rect
@@ -56,8 +67,11 @@ def cell_center(cell):
 
 
 def button_at(pos):
-    """Пикселийн байрлал дээрх товчны нэр ("wait", "end_turn") эсвэл None."""
+    """Пикселийн байрлал дээрх товчны нэр ("wait", "end_turn", "skill:0".."skill:3") эсвэл None."""
     for name, rect in BUTTONS.items():
         if point_in(rect, pos):
             return name
+    for i, rect in enumerate(SKILL_BUTTONS):
+        if point_in(rect, pos):
+            return f"skill:{i}"
     return None
