@@ -1,0 +1,86 @@
+{
+  "tile_size": 32,
+  "units": {
+    "knight": "units/knight.png",
+    "mage": "units/mage.png",
+    "healer": "units/healer.png",
+    "slime": "units/slime.png",
+    "slime_king": "units/slime_king.png",
+    "goblin": "units/goblin.png",
+    "goblin_king": "units/goblin_king.png",
+    "low_vampire": "units/low_vampire.png",
+    "vampire_lord": "units/vampire_lord.png",
+    "demon": "units/demon.png",
+    "imp": "units/imp.png",
+    "legion_commander": "units/legion_commander.png",
+    "hell_demon": "units/hell_demon.png",
+    "demon_lord": "units/demon_lord.png"
+  },
+  "themes": {
+    "slime": {
+      "floor": [
+        "themes/slime/floor_0.png",
+        "themes/slime/floor_1.png"
+      ],
+      "wall": "themes/slime/wall.png",
+      "obstacles": [
+        "themes/slime/obstacle_1.png",
+        "themes/slime/obstacle_2.png",
+        "themes/slime/obstacle_3.png"
+      ],
+      "torch": "themes/slime/torch.png"
+    },
+    "goblin": {
+      "floor": [
+        "themes/goblin/floor_0.png",
+        "themes/goblin/floor_1.png"
+      ],
+      "wall": "themes/goblin/wall.png",
+      "obstacles": [
+        "themes/goblin/obstacle_1.png",
+        "themes/goblin/obstacle_2.png",
+        "themes/goblin/obstacle_3.png"
+      ],
+      "torch": "themes/goblin/torch.png"
+    },
+    "vampire": {
+      "floor": [
+        "themes/vampire/floor_0.png",
+        "themes/vampire/floor_1.png"
+      ],
+      "wall": "themes/vampire/wall.png",
+      "obstacles": [
+        "themes/vampire/obstacle_1.png",
+        "themes/vampire/obstacle_2.png",
+        "themes/vampire/obstacle_3.png"
+      ],
+      "torch": "themes/vampire/torch.png"
+    },
+    "demon": {
+      "floor": [
+        "themes/demon/floor_0.png",
+        "themes/demon/floor_1.png"
+      ],
+      "wall": "themes/demon/wall.png",
+      "obstacles": [
+        "themes/demon/obstacle_1.png",
+        "themes/demon/obstacle_2.png",
+        "themes/demon/obstacle_3.png"
+      ],
+      "torch": "themes/demon/torch.png"
+    },
+    "hell": {
+      "floor": [
+        "themes/hell/floor_0.png",
+        "themes/hell/floor_1.png"
+      ],
+      "wall": "themes/hell/wall.png",
+      "obstacles": [
+        "themes/hell/obstacle_1.png",
+        "themes/hell/obstacle_2.png",
+        "themes/hell/obstacle_3.png"
+      ],
+      "torch": "themes/hell/torch.png"
+    }
+  }
+}
