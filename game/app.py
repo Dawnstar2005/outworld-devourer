@@ -51,7 +51,7 @@ class App:
                  boss_step_delay: float = BOSS_STEP_DELAY,
                  boss_factory: Optional[Callable[[str], object]] = None,
                  boss_mode: str = "eval", start_screen: str = "menu",
-                 show_boss_panel: bool = True, sound: bool = True):
+                 show_boss_panel: bool = True, sound: bool = True, logger=None):
         pygame.mixer.pre_init(44100, -16, 2, 512)   # дууны саатлыг багасгана
         pygame.init()
         pygame.display.set_caption("Outwold devourer")
@@ -72,6 +72,9 @@ class App:
         self.selection = Selection(self.session, side=self.session.human_side)
         self.stats = MatchStats()
         self.session.add_hook(self.stats.on_action)
+        self.logger = logger              # learning.GameLogger — тоглолтын log (DQ)
+        if logger is not None:
+            self.session.add_hook(logger.on_action)
         self.fixed_boss = boss
         self.boss_factory = boss_factory
         self.boss_mode = boss_mode
@@ -102,6 +105,8 @@ class App:
                                 MenuItem("menu", "Үндсэн цэс")], top=230)
         self.result_menu = Menu([MenuItem("again", "Дахин тоглох"),
                                  MenuItem("menu", "Үндсэн цэс")], top=410)
+        if logger is not None and start_screen == "game":   # --skip-menu: эхний тоглолтын log
+            logger.start(self.state, meta={"boss": self._boss_label()})
 
     # ------------------------------------------------------------------ босс үүсгэх
     def _new_controller(self):
@@ -153,6 +158,8 @@ class App:
         if self.fixed_boss is None:
             self.boss = BossDriver(self._new_controller())
         self.session.reset()
+        if self.logger is not None:
+            self.logger.start(self.state, meta={"boss": self._boss_label()})
         self.stats.reset()
         self.selection.clear()
         self.anim.clear()
@@ -167,7 +174,13 @@ class App:
 
     restart = start_game
 
+    def _boss_label(self) -> str:
+        c = self.boss.controller
+        return "placeholder" if isinstance(c, PlaceholderBoss) else getattr(c, "mode", type(c).__name__)
+
     def go_menu(self) -> None:
+        if self.logger is not None:
+            self.logger.close("menu")
         self.boss.cancel()
         self.boss_phase = "idle"
         self.paused = False
@@ -474,6 +487,8 @@ class App:
             frames += 1
             if max_frames is not None and frames >= max_frames:
                 break
+        if self.logger is not None:
+            self.logger.close("quit")
         pygame.quit()
 
 
@@ -487,11 +502,17 @@ def main(argv=None) -> int:
                    help="ai/ байсан ч түр боссыг ашиглах")
     p.add_argument("--skip-intro", action="store_true", help="эхлэлийн дүр зургийг алгасах")
     p.add_argument("--skip-menu", action="store_true", help="цэсгүйгээр шууд тоглоом эхлүүлэх")
+    p.add_argument("--log-dir", default="logs", help="тоглолтын log хадгалах хавтас")
+    p.add_argument("--no-log", action="store_true", help="тоглолтын log бичихгүй")
     p.add_argument("--frames", type=int, default=None, help=argparse.SUPPRESS)
     args = p.parse_args(argv)
 
     boss = PlaceholderBoss(seed=args.seed) if args.placeholder_boss else None
-    app = App(GameSession(human_side=HEROES), boss=boss, fps=args.fps,
+    logger = None
+    if not args.no_log:
+        from learning import GameLogger
+        logger = GameLogger(args.log_dir, human_side=HEROES)
+    app = App(GameSession(human_side=HEROES), boss=boss, fps=args.fps, logger=logger,
               boss_factory=lambda mode: make_boss(mode=mode, seed=args.seed),
               boss_mode=args.boss_mode,
               start_screen="game" if args.skip_menu else ("menu" if args.skip_intro else "intro"))
