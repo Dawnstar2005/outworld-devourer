@@ -140,6 +140,21 @@ r = play_match(HERO_BOTS["cautious"](seed=1), PlaceholderBoss(seed=1), logger=No
 r.winner, r.rounds, r.boss_hp
 ```
 
+## Туршилт (`experiments/`)
+
+```bash
+python -m experiments --games 100 --boss eval     # ai/ шаардлагатай; --boss placeholder — түр босс
+```
+
+1. **Үндсэн:** суралцаагүй босс vs 6 bot, 100 тулаан — ялалтын хувь, тулааны урт, боссын үлдсэн HP.
+2. **A/B:** bot бүрийн 5 тулааны log-оос профайл сургаад, суралцсан (A) ба суралцаагүй (B) боссыг
+   **ижил seed**-ээр 100 + 100 тулаанд харьцуулна. Ялгааны 95% интервал — paired bootstrap.
+3. **Тэнцвэр:** `engine/constants.py`-г өөрчлөхгүйгээр утгыг зөвхөн туршилтын процесст түр сольж
+   (боссын HP ×0.8, ×0.7, баатруудын HP ×1.25, Хар дөл ×0.75, Тамын галын cooldown +1, ...) тус бүрт 100 тулаан.
+
+Гаралт: `experiments/results/REPORT.md` (монгол тайлан, PM-ийн дүгнэлттэй), `games.csv` (тулаан бүр),
+`profiles.json`. Seed тогтмол тул дахин ажиллуулахад ижил дүн гарна.
+
 ## `engine` API (GD, DQ-д зориулав)
 
 ```python

@@ -27,11 +27,16 @@ class MatchResult:
 
 
 def play_match(hero_bot, boss, logger=None, state: GameState | None = None,
-               max_actions: int = 5000, meta: dict | None = None) -> MatchResult:
-    """`hero_bot.choose(state)` ба `boss.decide(state).actions`-аар нэг тулаан тоглуулна."""
+               max_actions: int = 5000, meta: dict | None = None, hooks=()) -> MatchResult:
+    """`hero_bot.choose(state)` ба `boss.decide(state).actions`-аар нэг тулаан тоглуулна.
+
+    hooks — нэмэлт on_action(state_before, action, events) функцууд (туршилтын хэмжилт).
+    """
     session = GameSession(state=state or GameState.new_game(), human_side=HEROES)
     count = [0]
     session.add_hook(lambda *_: count.__setitem__(0, count[0] + 1))
+    for hook in hooks:
+        session.add_hook(hook)
     if logger is not None:
         session.add_hook(logger.on_action)
         logger.start(session.state, meta={"bot": getattr(hero_bot, "name", "?"), **(meta or {})})
