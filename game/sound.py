@@ -20,6 +20,11 @@ SKILL_SOUNDS = {
     "fireball": "blast", "hellfire": "blast",
     "curse": "curse", "taunt": "taunt", "ice_wall": "ice",
     "heal": "heal", "shield": "shield", "summon_imp": "summon",
+    # dungeon-ий мангас, боссууд
+    "acid": "slash", "slime_slam": "blast", "acid_spit": "dark_flame", "split": "summon",
+    "stab": "slash", "cleave": "slash", "spear_throw": "slash", "call_goblins": "summon",
+    "bite": "slash", "blood_drain": "dark_flame", "bat_swarm": "blast",
+    "demon_claw": "slash", "hellblade": "slash", "fire_claw": "slash", "ember": "dark_flame",
 }
 
 DEFAULT_VOLUME = 0.6
