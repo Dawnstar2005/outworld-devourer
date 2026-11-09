@@ -127,6 +127,8 @@ class DungeonSprites:
         self.units = {}
         self.units_dim = {}
         self.themes = {}
+        self.icons = {}               # item, газрын зургийн дүрс: эх 32 px (icon(name, size)-ээр)
+        self._icon_cache = {}
         self.ok = False
         try:
             with open(self.folder / "manifest.json", encoding="utf-8") as f:
@@ -152,7 +154,20 @@ class DungeonSprites:
                                 for r in t.get("obstacles", ())) if i is not None]
             torch = _load_img(self.folder / t["torch"], cell_size) if t.get("torch") else None
             self.themes[name] = ThemeTiles(floors, wall, obst, torch)
+        for group in ("items", "ui"):
+            for name, rel in man.get(group, {}).items():
+                img = _load_img(self.folder / rel, tile)
+                if img is not None:
+                    self.icons[name] = img
         self.ok = bool(self.units or self.themes)
+
+    def icon(self, name: str, size: int):
+        """Item ("sharp_edge") эсвэл UI ("chest") дүрс `size` px-ээр; байхгүй бол None."""
+        key = (name, size)
+        if key not in self._icon_cache:
+            img = self.icons.get(name)
+            self._icon_cache[key] = pygame.transform.scale(img, (size, size)) if img else None
+        return self._icon_cache[key]
 
     def unit(self, kind: str, dim: bool = False):
         return (self.units_dim if dim else self.units).get(kind)

@@ -18,8 +18,10 @@ def app(monkeypatch):
     from game.boss_driver import PlaceholderBoss
     from game.session import GameSession
     calls = []
+    from game.campaign import Campaign
     session = GameSession(on_action=lambda before, a, ev: calls.append(a))
-    a = App(session, boss=PlaceholderBoss(seed=0), boss_step_delay=0.0, start_screen="game")
+    a = App(session, boss=PlaceholderBoss(seed=0), boss_step_delay=0.0, start_screen="game",
+            campaign=Campaign())                       # path=None → файл бичихгүй
     a.hook_calls = calls
     yield a
     pygame.quit()
@@ -218,7 +220,9 @@ def make_app(monkeypatch, **kw):
     monkeypatch.setenv("SDL_VIDEODRIVER", "dummy")
     monkeypatch.setenv("SDL_AUDIODRIVER", "dummy")
     from game.app import App
+    from game.campaign import Campaign
     kw.setdefault("boss_step_delay", 0.0)
+    kw.setdefault("campaign", Campaign())             # path=None → файл бичихгүй
     return App(**kw)
 
 
@@ -227,8 +231,9 @@ def test_menu_play_pause_and_back_to_menu(monkeypatch):
     app = make_app(monkeypatch, boss=PlaceholderBoss(seed=0))
     assert app.screen_name == "menu"
     app.draw()
-    key(app, pygame.K_RETURN)                         # «Тоглох»
-    assert app.screen_name == "game" and not app.paused
+    key(app, pygame.K_DOWN)
+    key(app, pygame.K_RETURN)                         # «Хурдан тулаан»
+    assert app.screen_name == "game" and not app.paused and app.stage_key is None
     key(app, pygame.K_ESCAPE)                         # сонголтгүй үед түр зогсоно
     assert app.paused
     app.draw()
@@ -314,11 +319,12 @@ def test_boss_mode_toggle_creates_boss_with_mode(monkeypatch):
         return PlaceholderBoss(seed=0)
 
     app = make_app(monkeypatch, boss_factory=factory)
-    assert app.main_menu.items[1].enabled
+    assert app.main_menu.items[2].enabled
+    key(app, pygame.K_DOWN)
     key(app, pygame.K_DOWN)
     key(app, pygame.K_RETURN)                         # «Босс: ...» → mcts
-    assert app.boss_mode == "mcts" and "MCTS" in app.main_menu.items[1].label
-    app.main_menu.index = 0
+    assert app.boss_mode == "mcts" and "MCTS" in app.main_menu.items[2].label
+    app.main_menu.index = 1                           # «Хурдан тулаан»
     key(app, pygame.K_RETURN)
     assert modes == ["eval", "mcts"]                  # эхлэхэд + шинэ тоглолтод
     pygame.quit()
@@ -329,7 +335,8 @@ def test_boss_mode_disabled_without_ai(monkeypatch):
     from game.boss_driver import PlaceholderBoss
     monkeypatch.setattr(app_mod, "ai_available", lambda: False)
     app = make_app(monkeypatch, boss_factory=lambda mode: PlaceholderBoss(seed=0))
-    assert not app.main_menu.items[1].enabled
+    assert not app.main_menu.items[2].enabled
+    key(app, pygame.K_DOWN)
     key(app, pygame.K_DOWN)
     assert app.main_menu.selected == "help"
     app.draw()
@@ -447,3 +454,135 @@ def test_music_player_safe_without_files(app, tmp_path):
     assert app.music.muted
     key(app, pygame.K_m)
     assert not app.music.muted
+
+
+# ---------------------------------------------------------------- dungeon (давхар, үе, шагнал)
+
+def _campaign_until(path, key):
+    import random
+
+    from game.campaign import STAGE_KEYS, Campaign
+    c = Campaign.load(path, rng=random.Random(0)) if path else Campaign(rng=random.Random(0))
+    for k in STAGE_KEYS:
+        if k == key:
+            break
+        c.finish_stage(k, True, 5)
+    return c
+
+
+def test_menu_play_opens_dungeon_map_and_starts_stage(monkeypatch):
+    from game.boss_driver import PlaceholderBoss
+    from game.enemy_ai import TacticalAI
+    app = make_app(monkeypatch, boss=PlaceholderBoss(seed=0))
+    key(app, pygame.K_RETURN)                         # «Тоглох (Dungeon)»
+    assert app.screen_name == "dungeon" and app.dungeon_map.selected == "1-1"
+    assert app.music_track() == "title"
+    app.draw()
+    key(app, pygame.K_RIGHT)                          # 1-2 түгжээтэй тул шилжихгүй
+    assert app.dungeon_map.selected == "1-1"
+    key(app, pygame.K_RETURN)
+    assert app.screen_name == "game" and app.stage_key == "1-1"
+    assert isinstance(app.boss.controller, TacticalAI)
+    assert app.board._theme_name == "slime"
+    assert {u.kind for u in app.state.units.values() if u.side != HEROES} == {"slime"}
+    assert app._log_meta()["stage"] == "1-1" and app._log_meta()["boss"] == "tactic"
+    app.draw()
+    key(app, pygame.K_ESCAPE)
+    assert app.paused and app.pause_menu.items[-1].key == "map"
+    app.pause_menu.index = len(app.pause_menu.items) - 1
+    key(app, pygame.K_RETURN)
+    assert app.screen_name == "dungeon" and app.dungeon_map.selected == "1-1"
+    key(app, pygame.K_ESCAPE)
+    assert app.screen_name == "menu"
+    pygame.quit()
+
+
+def test_tactical_enemies_take_their_turn(monkeypatch):
+    app = make_app(monkeypatch, start_screen="menu")
+    app.start_stage("1-1")
+    x, y, w, h = layout.BUTTONS["end_turn"]
+    click(app, (x + w / 2, y + h / 2))
+    assert run_until(app, lambda: app.boss_panel is not None)
+    assert app.boss_panel["mode"] == "tactic" and app.boss_panel["options"]
+    app.draw()
+    assert run_until(app, lambda: app.state.side_to_act == HEROES or app.state.is_over)
+    pygame.quit()
+
+
+def test_stage_win_saves_progress_and_shows_reward(monkeypatch, tmp_path):
+    from game.campaign import Campaign
+    camp = _campaign_until(tmp_path / "save.json", "1-1")
+    app = make_app(monkeypatch, campaign=camp, start_screen="menu")
+    app.start_stage("1-1")
+    app.state.winner = HEROES
+    assert run_until(app, lambda: app.screen_name == "reward")
+    r = app.reward
+    assert r.won and r.first_clear and r.unlocked == "1-2" and r.xp_gained > 0
+    assert app.music_track() == "result"
+    app.draw()
+    assert Campaign.load(tmp_path / "save.json").is_cleared("1-1")   # байнга хадгалагдсан
+    assert app.reward_menu.selected == "next"
+    key(app, pygame.K_RETURN)                         # «Дараагийн үе: 1-2»
+    assert app.screen_name == "game" and app.stage_key == "1-2"
+    pygame.quit()
+
+
+def test_stage_loss_offers_retry(monkeypatch):
+    from engine import DEMONS
+    app = make_app(monkeypatch, campaign=_campaign_until(None, "1-1"), start_screen="menu")
+    app.start_stage("1-1")
+    app.state.winner = DEMONS
+    assert run_until(app, lambda: app.screen_name == "reward")
+    assert not app.reward.won and app.reward_menu.selected == "again"
+    app.draw()
+    key(app, pygame.K_ESCAPE)
+    assert app.screen_name == "dungeon"
+    pygame.quit()
+
+
+def test_boss_drop_assigned_with_number_key(monkeypatch):
+    from engine.constants import BOSS_DROPS
+    camp = _campaign_until(None, "1-4")
+    app = make_app(monkeypatch, campaign=camp, start_screen="menu")
+    app.start_stage("1-4")
+    assert app.state.boss.kind == "slime_king"
+    app.state.winner = HEROES
+    assert run_until(app, lambda: app.screen_name == "reward")
+    assert app.reward.drop == BOSS_DROPS[1]
+    app.draw()
+    key(app, pygame.K_2)                              # 2 — Mage
+    assert app.reward.assigned_to == "mage" and camp.items("mage") == [BOSS_DROPS[1]]
+    assert BOSS_DROPS[1] not in camp.bag
+    app.draw()
+    pygame.quit()
+
+
+def test_final_stage_uses_learning_boss(monkeypatch):
+    from game.boss_driver import PlaceholderBoss
+    from game.enemy_ai import TacticalAI
+    boss = PlaceholderBoss(seed=0)
+    app = make_app(monkeypatch, boss=boss, campaign=_campaign_until(None, "5-4"),
+                   start_screen="menu")
+    app.start_stage("5-3")
+    assert isinstance(app.boss.controller, TacticalAI)
+    app.start_stage("5-4")
+    assert app.boss.controller is boss and app.state.boss.kind == "demon_lord"
+    assert app.state.units["knight"].level == app.campaign.level > 1
+    app.draw()
+    pygame.quit()
+
+
+def test_map_mouse_select_and_start(monkeypatch):
+    from game import dungeon_map as M
+    app = make_app(monkeypatch, campaign=_campaign_until(None, "1-3"), start_screen="menu")
+    app.go_map()
+    w = app.screen.get_width()
+    assert app.dungeon_map.selected == "1-3"
+    click(app, M.node_center("2-1", w))               # түгжээтэй
+    assert app.dungeon_map.selected == "1-3" and app.dungeon_map.message
+    click(app, M.node_center("1-1", w))
+    assert app.dungeon_map.selected == "1-1" and app.screen_name == "dungeon"
+    app.draw()
+    click(app, M.node_center("1-1", w))               # дахин дарвал эхэлнэ
+    assert app.screen_name == "game" and app.stage_key == "1-1"
+    pygame.quit()

@@ -19,6 +19,11 @@
     hud.py         — ээлжийн мэдээлэл, HP, ур чадварын товч (pygame)
     boss_panel.py  — «Боссын бодол» самбар, Tab (pygame)
     screens.py     — цэс, удирдлага, түр зогсолт, үр дүн (pygame)
+    campaign.py    — dungeon-ий ахиц (XP, item, давсан үе), байнгын save файл (pygame-гүй)
+    enemy_ai.py    — 1–4-р давхрын тактикийн дайсны AI (pygame-гүй)
+    dungeon_map.py — газрын зураг, шагналын дэлгэцийн байршил, сонголт (pygame-гүй)
+    dungeon_view.py — газрын зураг, шагналын дэлгэц зурах (pygame)
+    vfx.py         — ур чадварын тоосонцор, сум, тэсрэлт (pygame-гүй); vfx_draw.py зурна
     app.py         — үндсэн давталт, дэлгэц солих (pygame)
 
 Тоглоомын дүрэм энд байхгүй: бүгд engine/-д. Энэ багц pygame-ийг зөвхөн

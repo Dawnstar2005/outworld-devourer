@@ -82,5 +82,20 @@
       ],
       "torch": "themes/hell/torch.png"
     }
+  },
+  "items": {
+    "life_heart": "items/life_heart.png",
+    "iron_charm": "items/iron_charm.png",
+    "sharp_edge": "items/sharp_edge.png",
+    "rune_stone": "items/rune_stone.png",
+    "swift_boots": "items/swift_boots.png",
+    "slime_core": "items/slime_core.png",
+    "goblin_crown": "items/goblin_crown.png",
+    "vampire_fang": "items/vampire_fang.png",
+    "legion_sigil": "items/legion_sigil.png"
+  },
+  "ui": {
+    "chest": "ui/chest.png",
+    "stairs": "ui/stairs.png"
   }
 }

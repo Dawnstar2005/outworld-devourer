@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Optional
 
-from engine import DEMONS, HEROES, SKILLS, UNIT_TYPES, GameState
+from engine import DEMONS, HEROES, ITEMS, SKILLS, UNIT_TYPES, GameState
 
 TURN_NAMES = {HEROES: "Баатруудын ээлж", DEMONS: "Дайсны ээлж"}
 WINNER_NAMES = {HEROES: "Ялалт! Баатрууд яллаа", DEMONS: "Ялагдал. Дайсан яллаа", "draw": "Тэнцээ"}
@@ -30,6 +30,34 @@ def unit_name(uid: str, state: Optional[GameState] = None) -> str:
 def skill_name(sid: str) -> str:
     sk = SKILLS.get(sid)
     return sk.name if sk else sid
+
+
+RARITY_NAMES = {"common": "энгийн", "rare": "ховор", "boss": "боссын олз"}
+
+
+def item_name(iid: str) -> str:
+    it = ITEMS.get(iid)
+    return it.name if it else iid
+
+
+def item_effect(iid: str) -> str:
+    """«+8 HP · +5% хүч · +1 нүүдэл» — item-ийн нөлөө товчоор."""
+    it = ITEMS.get(iid)
+    if it is None:
+        return ""
+    parts = []
+    if it.hp:
+        parts.append(f"+{it.hp} HP")
+    if it.power:
+        parts.append(f"+{round(it.power * 100)}% хүч")
+    if it.move:
+        parts.append(f"+{it.move} нүүдэл")
+    return " · ".join(parts)
+
+
+def power_text(power_mult: float) -> str:
+    """1.15 → «+15%» (хохирол / эдгээлтийн нэмэгдэл)."""
+    return f"+{round((power_mult - 1.0) * 100)}%"
 
 
 def action_label(action, state: GameState) -> str:

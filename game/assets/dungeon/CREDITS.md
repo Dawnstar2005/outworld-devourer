@@ -65,3 +65,19 @@
 | themes/hell/obstacle_2.png | dungeon/statues/statue_demonic_bust.png | 32x32 | CC0 | 2026-11-09 |
 | themes/hell/obstacle_3.png | dungeon/statues/statue_iron.png | 32x32 | CC0 | 2026-11-09 |
 | themes/hell/torch.png | dungeon/wall/torches/torch_1.png | 32x32 | CC0 | 2026-11-09 |
+
+## Item, газрын зургийн дүрс (2026-11-09 нэмэв, мөн багцаас)
+
+| Манай файл (game/assets/dungeon/) | Багц доторх анхны зам | Размер | Лиценз | Татсан огноо |
+|---|---|---|---|---|
+| items/life_heart.png | item/amulet/crystal_red.png | 32x32 | CC0 | 2026-11-09 |
+| items/iron_charm.png | item/amulet/cylinder_gray.png | 32x32 | CC0 | 2026-11-09 |
+| items/sharp_edge.png | item/weapon/dagger_3.png | 32x32 | CC0 | 2026-11-09 |
+| items/rune_stone.png | item/misc/runes/rune_demonic_1.png | 32x32 | CC0 | 2026-11-09 |
+| items/swift_boots.png | item/armor/feet/boots_3_stripe_new.png | 32x32 | CC0 | 2026-11-09 |
+| items/slime_core.png | item/misc/runes/rune_slime.png | 32x32 | CC0 | 2026-11-09 |
+| items/goblin_crown.png | item/armor/headgear/helmet_art_1.png | 32x32 | CC0 | 2026-11-09 |
+| items/vampire_fang.png | item/weapon/artefact/spwpn_vampires_tooth.png | 32x32 | CC0 | 2026-11-09 |
+| items/legion_sigil.png | item/misc/runes/rune_gehenna_new.png | 32x32 | CC0 | 2026-11-09 |
+| ui/chest.png | dungeon/chest.png | 32x32 | CC0 | 2026-11-09 |
+| ui/stairs.png | dungeon/gateways/abyssal_stair.png | 32x32 | CC0 | 2026-11-09 |
