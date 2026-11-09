@@ -48,6 +48,9 @@ def test_move_hero_with_mouse(app):
     assert app.selection.unit_uid == "knight"
     app.step(0.016)
     click(app, layout.cell_center(dest))
+    assert knight.pos == start and app.selection.dest == dest   # очих нүд сонгогдсон
+    app.step(0.016)
+    click(app, layout.cell_center(dest))
     assert knight.pos == dest and knight.acted
     assert app.anim.busy                              # гулсаж байна
     assert run_until(app, lambda: not app.anim.busy)
@@ -56,8 +59,10 @@ def test_move_hero_with_mouse(app):
 
 def test_input_ignored_while_animating(app):
     knight = app.state.units["knight"]
+    dest = (knight.x, knight.y - 3)
     click(app, layout.cell_center(knight.pos))
-    click(app, layout.cell_center((knight.x, knight.y - 3)))
+    click(app, layout.cell_center(dest))
+    click(app, layout.cell_center(dest))
     assert app.anim.busy
     mage = app.state.units["mage"]
     click(app, layout.cell_center(mage.pos))
@@ -119,3 +124,64 @@ def test_frame_time_fits_60_fps(app):
         app.step(1 / 60)
     per_frame = (time.perf_counter() - t0) / n
     assert per_frame < 1 / 60, f"{per_frame * 1000:.1f} ms/кадр"
+
+
+def key(app, k):
+    app.handle_event(pygame.event.Event(pygame.KEYDOWN, key=k, mod=0, unicode="", scancode=0))
+
+
+def test_use_skill_with_hotkey_and_click(app):
+    s = app.state
+    s.units["knight"].x, s.units["knight"].y = (4, 3)
+    click(app, layout.cell_center((4, 3)))
+    click(app, layout.cell_center((4, 2)))
+    key(app, pygame.K_1)                                  # Сэлэм
+    assert app.selection.skill == "sword"
+    app.hover = (4, 1)
+    app.draw()                                            # урьдчилсан харагдац зурагдана
+    click(app, layout.cell_center((4, 1)))
+    assert s.units["demon_lord"].hp == 380
+    assert any(f.kind == "skill" for f in app.anim.floats)
+    assert app.anim.flashes
+    assert app.hook_calls[-1].skill == "sword"
+
+
+def test_skill_button_click_and_wall_rotate_with_wheel(app):
+    s = app.state
+    s.units["mage"].x, s.units["mage"].y = (4, 4)
+    click(app, layout.cell_center((4, 4)))
+    x, y, w, h = layout.SKILL_BUTTONS[1]                  # Мөсөн хана
+    click(app, (x + w / 2, y + h / 2))
+    assert app.selection.skill == "ice_wall"
+    v = app.selection.variant
+    app.handle_event(pygame.event.Event(pygame.MOUSEWHEEL, x=0, y=1, flipped=False))
+    assert app.selection.variant == 1 - v
+    app.hover = (4, 5)
+    app.draw()
+    click(app, layout.cell_center((4, 5)))
+    expected = {(4, 5), (4, 6)} if v == 0 else {(4, 5), (5, 5)}   # эргүүлсний дараах чиглэл
+    assert set(s.walls) == expected
+
+
+def test_right_click_steps_back(app):
+    s = app.state
+    s.units["knight"].x, s.units["knight"].y = (4, 3)
+    click(app, layout.cell_center((4, 3)))
+    click(app, layout.cell_center((4, 2)))
+    key(app, pygame.K_2)
+    for expected in ("taunt", None):
+        assert app.selection.skill == expected
+        click(app, layout.cell_center((0, 0)), button=3)
+    assert app.selection.dest == (4, 3)
+    click(app, layout.cell_center((0, 0)), button=3)
+    assert app.selection.unit_uid is None
+
+
+def test_status_badges_draw(app):
+    s = app.state
+    s.units["knight"].shield = 20
+    s.units["mage"].cursed = 2
+    s.units["demon_lord"].taunted_by, s.units["demon_lord"].taunt_turns = "knight", 2
+    s.walls[(0, 4)] = 2
+    app.hover = s.units["demon_lord"].pos
+    app.draw()

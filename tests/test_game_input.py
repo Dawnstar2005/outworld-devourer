@@ -52,11 +52,15 @@ def test_layout_cell_roundtrip_and_outside():
 
 
 def test_buttons_inside_screen_and_hit_test():
-    for name, (x, y, w, h) in layout.BUTTONS.items():
+    named = dict(layout.BUTTONS)
+    named.update({f"skill:{i}": r for i, r in enumerate(layout.SKILL_BUTTONS)})
+    for name, (x, y, w, h) in named.items():
         assert 0 <= x and x + w <= layout.SCREEN_W and 0 <= y and y + h <= layout.SCREEN_H
         assert layout.button_at((x + w // 2, y + h // 2)) == name
         assert layout.cell_at((x + w // 2, y + h // 2)) is None
     assert layout.button_at(layout.cell_center((0, 0))) is None
+    last = layout.SKILL_BUTTONS[-1]
+    assert last[1] + last[3] < layout.LOG_Y < layout.BUTTONS["wait"][1]
 
 
 # ---------------------------------------------------------------- сонголт
@@ -88,7 +92,10 @@ def test_click_reachable_cell_moves_hero():
     sel.click(start)
     dest = (start[0], start[1] - 2)
     assert dest in sel.move_cells
-    a = sel.click(dest)
+    assert sel.click(dest) is None and sel.dest == dest      # эхний дарлт: очих нүд
+    assert s.units["knight"].pos == start                    # төлөв өөрчлөгдөөгүй
+    assert sel.hover_action(dest) == Action("knight", dest)
+    a = sel.click(dest)                                      # дахин дарлт: хөдлөх
     assert a == Action("knight", dest)
     assert is_legal(s, a)
     assert sel.unit_uid is None
@@ -118,7 +125,7 @@ def test_click_other_hero_switches_selection():
 def test_acted_hero_not_selectable():
     session, sel = fresh()
     sel.select("knight")
-    session.play(sel.wait())
+    session.play(sel.confirm_move())
     assert session.state.units["knight"].acted
     assert not sel.select("knight")
     sel.click(session.state.units["knight"].pos)
@@ -128,9 +135,9 @@ def test_acted_hero_not_selectable():
 def test_wait_keeps_position():
     session, sel = fresh()
     pos = session.state.units["healer"].pos
-    assert sel.wait() is None            # сонгоогүй үед юу ч болохгүй
+    assert sel.confirm_move() is None    # сонгоогүй үед юу ч болохгүй
     sel.select("healer")
-    a = sel.wait()
+    a = sel.confirm_move()
     assert a == Action("healer", pos)
     events = session.play(a)
     assert session.state.units["healer"].pos == pos
@@ -141,7 +148,7 @@ def test_all_heroes_act_then_turn_passes_to_boss():
     session, sel = fresh()
     for uid in ("knight", "mage", "healer"):
         assert sel.select(uid)
-        session.play(sel.wait())
+        session.play(sel.confirm_move())
     assert session.state.side_to_act == DEMONS
     assert not session.human_to_act
 
@@ -178,7 +185,7 @@ def test_refresh_clears_dead_or_acted_selection():
 def test_selection_follows_session_reset():
     session, sel = fresh()
     sel.select("knight")
-    session.play(sel.wait())
+    session.play(sel.confirm_move())
     session.reset()
     assert sel.select("knight")
 
@@ -336,6 +343,19 @@ def test_animator_floats_and_fades():
     assert anim.floats == [] and anim.fades == []
 
 
+def test_animator_skill_flashes():
+    anim = Animator()
+    s = GameState.new_game()
+    anim.push([{"type": "skill", "unit": "mage", "skill": "fireball", "target": (3, 1),
+                "target_uid": None},
+               {"type": "wall", "src": "mage", "cells": [(0, 4), (1, 4)], "turns": 2}], s)
+    assert len(anim.flashes[0].cells) == 9 and anim.flashes[0].kind == "harm"
+    assert anim.flashes[1].kind == "wall"
+    assert [f.kind for f in anim.floats] == ["skill"]
+    anim.update(5)
+    assert anim.flashes == [] and anim.floats == []
+
+
 def test_labels():
     s = GameState.new_game()
     assert unit_name("imp2", s) == "Imp 2" and unit_name("demon_lord", s) == "Demon Lord"
@@ -349,3 +369,171 @@ def test_labels():
     for a in unit_actions(s2, s2.units["demon_lord"])[:40]:
         for ev in apply(s2.clone(), a):
             event_text(ev, s2)
+
+
+# ---------------------------------------------------------------- ур чадвар (11/20)
+
+def knight_next_to_boss():
+    """Knight (4,3), очих нүд (4,2) — Demon Lord (4,1)-тэй зэрэгцэнэ."""
+    session, sel = fresh()
+    place(session.state, knight=(4, 3))
+    sel.select("knight")
+    sel.stage((4, 2))
+    return session, sel
+
+
+def test_stage_then_confirm_with_button():
+    session, sel = fresh()
+    start = session.state.units["mage"].pos
+    sel.select("mage")
+    assert sel.stage((start[0], start[1] - 1))
+    assert not sel.stage((0, 0))                     # хүрэхгүй нүд
+    a = sel.confirm_move()
+    assert a == Action("mage", (start[0], start[1] - 1)) and sel.unit_uid is None
+
+
+def test_back_goes_one_step_at_a_time():
+    session, sel = knight_next_to_boss()
+    sel.arm("sword")
+    sel.back()
+    assert sel.skill is None and sel.dest == (4, 2)
+    sel.back()
+    assert sel.dest == (4, 3) and sel.unit_uid == "knight"
+    sel.back()
+    assert sel.unit_uid is None
+
+
+def test_single_target_skill_from_destination():
+    session, sel = knight_next_to_boss()
+    assert sel.skill_status("sword") == "ready"
+    assert sel.arm("sword") is None and sel.skill == "sword"
+    assert sel.needs_target
+    assert sel.target_cells == {(4, 1)}
+    a = sel.click((4, 1))
+    assert a == Action("knight", (4, 2), "sword", (4, 1), "demon_lord")
+    events = session.play(a)
+    assert any(e["type"] == "damage" and e["dst"] == "demon_lord" for e in events)
+
+
+def test_skill_status_no_target_and_cooldown():
+    session, sel = fresh()
+    sel.select("knight")
+    assert sel.skill_status("sword") == "no_target"    # эхлэх байрлалаас дайсан хол
+    assert sel.arm("sword") is None and sel.skill is None
+    session.state.units["knight"].cooldowns["taunt"] = 2
+    assert sel.skill_status("taunt") == "cooldown"
+    assert sel.arm("taunt") is None and sel.skill is None
+    assert sel.arm("fireball") is None                 # өөр дүрийн ур чадвар
+
+
+def test_no_target_skill_commits_on_second_press_or_dest_click():
+    session, sel = knight_next_to_boss()
+    assert sel.arm("taunt") is None
+    assert not sel.needs_target and sel.target_cells == set()
+    assert sel.armed_action() == Action("knight", (4, 2), "taunt")
+    assert sel.preview(sel.armed_action())["demon_lord"].get("taunted")
+    a = sel.arm("taunt")
+    assert a == Action("knight", (4, 2), "taunt") and sel.unit_uid is None
+    # дүрийн нүдэн дээр дарж баталгаажуулах
+    session2, sel2 = knight_next_to_boss()
+    sel2.arm_index(1)
+    assert sel2.click((4, 2)) == Action("knight", (4, 2), "taunt")
+
+
+def test_area_damage_targets_and_preview_use_engine():
+    session, sel = fresh()
+    s = session.state
+    place(s, mage=(4, 4))
+    sel.select("mage")
+    sel.arm("fireball")
+    assert (3, 1) in sel.target_cells
+    a = sel.action_for_target((3, 1))
+    fx = sel.preview(a)
+    assert fx["demon_lord"]["hp"] == -25 and fx["imp1"]["hp"] == -25
+    assert "imp2" not in fx and not fx["imp1"].get("dies")
+    assert s.units["demon_lord"].hp == 400                 # жинхэнэ төлөв хөндөгдөөгүй
+    assert sel.preview(a) is fx                             # cache
+
+
+def test_preview_marks_deaths():
+    session, sel = fresh()
+    s = session.state
+    place(s, knight=(2, 3))
+    s.units["imp1"].hp = 15
+    sel.select("knight")
+    sel.stage((2, 2))
+    sel.arm("sword")
+    fx = sel.preview(sel.action_for_target((2, 1)))
+    assert fx["imp1"] == {"hp": -15, "dies": True}
+
+
+def test_ice_wall_variant_and_rotate():
+    session, sel = fresh()
+    place(session.state, mage=(4, 4))
+    sel.select("mage")
+    sel.arm("ice_wall")
+    assert sel.action_for_target((4, 5)).variant == 0
+    sel.rotate()
+    assert sel.action_for_target((4, 5)).variant == 1
+    sel.rotate()
+    a = sel.action_for_target((7, 4))                       # хэвтээ бол талбайгаас гарна
+    assert a is not None and a.variant == 1
+
+
+def test_heal_self_at_destination():
+    session, sel = fresh()
+    s = session.state
+    s.units["healer"].hp = 40
+    sel.select("healer")
+    sel.stage((5, 6))
+    sel.arm("heal")
+    assert (5, 6) in sel.target_cells
+    a = sel.click((5, 6))
+    assert a == Action("healer", (5, 6), "heal", (5, 6), "healer")
+    session.play(a)
+    assert s.units["healer"].hp == 75 and s.units["healer"].pos == (5, 6)
+
+
+def test_restage_while_armed_keeps_or_drops_skill():
+    session, sel = knight_next_to_boss()
+    sel.arm("taunt")
+    assert sel.click((4, 3)) is None                  # өөр нүд — taunt тэндээс ч хүрнэ
+    assert sel.dest == (4, 3) and sel.skill == "taunt"
+    sel.stage((4, 2))
+    sel.arm_index(0)                                  # sword
+    assert sel.click((4, 5)) is None                  # тэндээс сэлэм хүрэхгүй
+    assert sel.dest == (4, 5) and sel.skill is None
+
+
+def test_click_non_target_while_armed_only_disarms():
+    session, sel = knight_next_to_boss()
+    sel.arm("sword")
+    assert sel.click((0, 0)) is None
+    assert sel.skill is None and sel.unit_uid == "knight" and sel.dest == (4, 2)
+
+
+def test_every_hero_skill_action_reachable_through_selection():
+    """UI-аар engine-ийн бүх ур чадварын нүүдлийг хийж болохыг шалгана."""
+    session, sel = fresh()
+    s = session.state
+    place(s, knight=(4, 3), mage=(3, 4), healer=(5, 4))
+    s.units["mage"].hp = 30
+    for uid in ("knight", "mage", "healer"):
+        sel.select(uid)
+        wanted = {a for a in unit_actions(s, s.units[uid]) if a.skill}
+        got = set()
+        for dest in sel.move_cells:
+            sel.stage(dest)
+            for sid in sel.skills:
+                if sel.skill_status(sid) != "ready":
+                    continue
+                for variant in (0, 1):
+                    sel.skill = None
+                    sel.variant = variant
+                    sel.arm(sid)
+                    if sel.needs_target:
+                        got.update(sel.action_for_target(c) for c in sel.target_cells)
+                    else:
+                        got.add(sel.armed_action())
+        assert got == wanted, uid
+        sel.clear()

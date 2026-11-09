@@ -27,7 +27,7 @@ from .labels import event_text
 from .session import GameSession
 
 FPS = 60
-BOSS_STEP_DELAY = 0.35     # боссын нүүдэл хооронд (сек), тоглогч юу болсныг харах
+BOSS_STEP_DELAY = 0.5      # боссын нүүдэл хооронд (сек), тоглогч юу болсныг харах
 LOG_LINES = 14
 
 
@@ -100,9 +100,12 @@ class App:
         elif e.type == pygame.MOUSEBUTTONDOWN:
             self.mouse_pos = e.pos
             if e.button == 3:
-                self.selection.clear()
+                self.selection.back()
             elif e.button == 1:
                 self._left_click(e.pos)
+        elif e.type == pygame.MOUSEWHEEL:
+            if self.selection.skill_kind(self.selection.skill) == "wall":
+                self.selection.rotate()
         elif e.type == pygame.KEYDOWN:
             self._key(e.key)
 
@@ -111,19 +114,19 @@ class App:
             return
         button = L.button_at(pos)
         if button == "wait":
-            self._try(self.selection.wait())
+            self._try(self.selection.confirm_move())
         elif button == "end_turn":
             self._try(self.selection.end_turn())
+        elif button is not None and button.startswith("skill:"):
+            self._try(self.selection.arm_index(int(button.split(":")[1])))
         else:
             cell = L.cell_at(pos)
             if cell is not None:
                 self._try(self.selection.click(cell))
-            else:
-                self.selection.clear()
 
     def _key(self, key) -> None:
         if key == pygame.K_ESCAPE:
-            self.selection.clear()
+            self.selection.back()
         elif key == pygame.K_r and self.state.is_over:
             self.restart()
         elif self.input_locked:
@@ -131,7 +134,11 @@ class App:
         elif key in (pygame.K_e, pygame.K_RETURN):
             self._try(self.selection.end_turn())
         elif key in (pygame.K_w, pygame.K_SPACE):
-            self._try(self.selection.wait())
+            self._try(self.selection.confirm_move())
+        elif key == pygame.K_v:
+            self.selection.rotate()
+        elif pygame.K_1 <= key <= pygame.K_4:
+            self._try(self.selection.arm_index(key - pygame.K_1))
 
     def _try(self, action) -> None:
         if action is None:
@@ -200,9 +207,10 @@ class App:
         self.board.draw(self.screen, self.state, self.selection, self.anim,
                         self.hover if interactive else None, interactive)
         enabled = {"wait": interactive and self.selection.unit is not None,
-                   "end_turn": interactive}
+                   "end_turn": interactive, "skills": interactive}
+        hover_unit = self.state.unit_at(self.hover) if self.hover is not None else None
         self.hud.draw(self.screen, self.state, self.selection, self.log, self.status_text(),
-                      enabled, self.mouse_pos)
+                      enabled, self.mouse_pos, hover_unit)
         if self.state.is_over and not self.anim.busy:
             self.hud.draw_game_over(self.screen, self.state)
         pygame.display.flip()
