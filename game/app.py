@@ -54,7 +54,7 @@ class App:
                  show_boss_panel: bool = True, sound: bool = True):
         pygame.mixer.pre_init(44100, -16, 2, 512)   # дууны саатлыг багасгана
         pygame.init()
-        pygame.display.set_caption("Outwold devourer")
+        pygame.display.set_caption("Outworld Devourer")
         self.show_boss_panel = show_boss_panel
         self.screen = pygame.display.set_mode(L.screen_size(show_boss_panel))
         self.clock = pygame.time.Clock()
@@ -478,7 +478,7 @@ class App:
 
 
 def main(argv=None) -> int:
-    p = argparse.ArgumentParser(prog="python -m game", description="Outwold devourer")
+    p = argparse.ArgumentParser(prog="python -m game", description="Outworld Devourer")
     p.add_argument("--fps", type=int, default=FPS)
     p.add_argument("--seed", type=int, default=None, help="боссын санамсаргүй сонголтын seed")
     p.add_argument("--boss-mode", choices=BOSS_MODES, default="eval",
