@@ -88,7 +88,7 @@ PDF-д тодорхойгүй байсан утгыг (`constants.py`-д `TBD (G
 from ai import BossAI
 
 boss = BossAI(profile=None)              # profile: DQ-ийн зуршлын профайл (dict), None = суралцдаггүй
-                                         # mode="mcts" (default, ~1 сек) эсвэл "eval" (~10 мс)
+                                         # mode="lookahead" (default, ~20 мс), "mcts" (~1 сек), "eval" (~7 мс)
 # боссын ээлж ирэхэд:
 decision, events = boss.play_turn(state) # state-ийг шууд өөрчилнө, events-ээр анимаци хийнэ
 panel = decision.to_panel()              # «Боссын бодол» самбар
@@ -119,8 +119,10 @@ def predictor(state, unit_uid, actions) -> list[float]:   # len == len(actions),
     ...
 boss = BossAI(profile=profile, predictor=predictor)
 ```
-Өгөхгүй бол баатрууд «ихэвчлэн шунахай» тоглоно гэж таамаглана.
+Өгөхгүй бол `GreedyHeroModel` ашиглана: баатрууд шунахай тоглоно гэж таамаглана.
+`lookahead` горимд таамаглагчийг `PredictorHeroModel`-оор, `mcts` горимд rollout-д ашиглана.
+Горимуудын харьцуулалт, туршилтын дүн: [`docs/ai.md`](docs/ai.md).
 
-**Анхаар:** MCTS шийдвэр ~1 секунд үргэлжилнэ. UI царцахгүйн тулд `boss.decide()`-г
+**Анхаар:** `mcts` горимд шийдвэр ~1 секунд үргэлжилнэ. UI царцахгүйн тулд `boss.decide()`-г
 тусдаа thread-д ажиллуулж, хооронд нь «Босс бодож байна...» харуулна. Дараа нь
 `decision.actions`-ийг нэг нэгээр нь `apply()` хийж анимацлана.
