@@ -7,7 +7,8 @@ import pytest
 
 from engine import (DEMONS, END_TURN, HEROES, ITEMS, SKILLS, UNIT_TYPES, Action, GameState, apply,
                     is_legal, legal_actions, reachable, unit_actions)
-from engine.constants import (BOARD_H, BOARD_W, FLOOR_ENEMY_SCALE, LEVEL_XP, LOSS_XP_FRACTION,
+from engine.constants import (BOARD_H, BOARD_W, BOSS_EXTRA_SCALE, FLOOR_ENEMY_SCALE, LEVEL_XP,
+                              LOSS_XP_FRACTION,
                               MAX_SUMMONS, START_POSITIONS)
 from engine.dungeon import (FLOORS, HERO_UIDS, STAGES_PER_FLOOR, get_stage, new_stage_state,
                             stage_encounter)
@@ -171,6 +172,18 @@ def test_generalized_summon_revives_floor_minions():
         assert u.alive and u.max_hp == round(UNIT_TYPES["slime"].hp * hp_m)
         assert u.power_mult == pw_m
     assert sum(1 for u in s.alive_units(DEMONS) if u.kind == "slime") <= MAX_SUMMONS
+
+
+def test_boss_extra_scale_only_on_boss():
+    """Эцсийн босст нэмэлт үржвэр, дагуул Imp-үүдэд зөвхөн давхрын үржвэр."""
+    s = new_stage_state(get_stage(5, 4))
+    hp_m, pw_m = FLOOR_ENEMY_SCALE[5]
+    bh, bp = BOSS_EXTRA_SCALE.get(5, (1.0, 1.0))
+    lord = s.units["demon_lord"]
+    assert lord.max_hp == round(UNIT_TYPES["demon_lord"].hp * hp_m * bh)
+    assert lord.power_mult == pytest.approx(pw_m * bp)
+    imp = s.units["imp1"]
+    assert imp.max_hp == round(UNIT_TYPES["imp"].hp * hp_m) and imp.power_mult == pw_m
 
 
 def test_vampire_lord_can_mist_step():
