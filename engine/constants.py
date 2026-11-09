@@ -59,29 +59,29 @@ SKILLS = {
 
     # ---- Dungeon (2026-11-09, PM-ийн дизайн) — анхны утга, тэнцвэрийг туршилтаар тааруулна ----
     # 1-р давхар: Slime
-    "acid":        Skill("acid", "Хүчил", "damage", range=1, power=9, cooldown=1),
-    "slime_slam":  Skill("slime_slam", "Нялцгай цохилт", "area_damage", range=2, power=14, cooldown=2),
-    "acid_spit":   Skill("acid_spit", "Хүчлийн нулимс", "damage", range=3, power=12, cooldown=1),
-    "split":       Skill("split", "Хуваагдах", "summon", range=1, cooldown=4, summons="slime"),
+    "acid":        Skill("acid", "Хүчил", "damage", range=1, power=24, cooldown=1),
+    "slime_slam":  Skill("slime_slam", "Нялцгай цохилт", "area_damage", range=2, power=16, cooldown=2),
+    "acid_spit":   Skill("acid_spit", "Хүчлийн нулимс", "damage", range=3, power=14, cooldown=1),
+    "split":       Skill("split", "Хуваагдах", "summon", range=1, cooldown=6, summons="slime"),
     # 2-р давхар: Goblin
-    "stab":        Skill("stab", "Хутгалах", "damage", range=1, power=11, cooldown=1),
-    "cleave":      Skill("cleave", "Хүнд цавчилт", "damage", range=1, power=22, cooldown=1),
+    "stab":        Skill("stab", "Хутгалах", "damage", range=1, power=21, cooldown=1),
+    "cleave":      Skill("cleave", "Хүнд цавчилт", "damage", range=1, power=20, cooldown=1),
     "spear_throw": Skill("spear_throw", "Жад шидэх", "damage", range=4, power=14, cooldown=2),
-    "call_goblins": Skill("call_goblins", "Гоблин дуудах", "summon", range=1, cooldown=4,
+    "call_goblins": Skill("call_goblins", "Гоблин дуудах", "summon", range=1, cooldown=6,
                           summons="goblin"),
     # 3-р давхар: Vampire
-    "bite":        Skill("bite", "Хазах", "drain", range=1, power=11, cooldown=1, drain=0.5),
+    "bite":        Skill("bite", "Хазах", "drain", range=1, power=22, cooldown=1, drain=0.5),
     "blood_drain": Skill("blood_drain", "Цус сорох", "drain", range=3, power=18, cooldown=1,
                          drain=0.75),
     "bat_swarm":   Skill("bat_swarm", "Сарьсан багваахайн сүрэг", "area_damage", range=3,
                          power=14, cooldown=3),
     "mist_step":   Skill("mist_step", "Манан алхам", "leap", range=5, cooldown=3),
     # 4-р давхар: Demon legion
-    "demon_claw":  Skill("demon_claw", "Чөтгөрийн сарвуу", "damage", range=1, power=13, cooldown=1),
-    "hellblade":   Skill("hellblade", "Тамын илд", "damage", range=1, power=24, cooldown=1),
+    "demon_claw":  Skill("demon_claw", "Чөтгөрийн сарвуу", "damage", range=1, power=28, cooldown=1),
+    "hellblade":   Skill("hellblade", "Тамын илд", "damage", range=1, power=32, cooldown=1),
     # 5-р давхар: Made in Hell
-    "fire_claw":   Skill("fire_claw", "Галт сарвуу", "damage", range=1, power=13, cooldown=1),
-    "ember":       Skill("ember", "Цог", "damage", range=3, power=10, cooldown=2),
+    "fire_claw":   Skill("fire_claw", "Галт сарвуу", "damage", range=1, power=30, cooldown=1),
+    "ember":       Skill("ember", "Цог", "damage", range=3, power=18, cooldown=2),
 }
 
 
@@ -107,20 +107,20 @@ UNIT_TYPES = {
     "imp": UnitType("imp", "Imp", DEMONS, hp=30, move=4, skills=("claw",)),
 
     # ---- Dungeon-ийн мангас, давхрын боссууд ----
-    "slime": UnitType("slime", "Slime", DEMONS, hp=26, move=2, skills=("acid",)),
-    "slime_king": UnitType("slime_king", "Slime King", DEMONS, hp=170, move=2,
+    "slime": UnitType("slime", "Slime", DEMONS, hp=80, move=2, skills=("acid",)),
+    "slime_king": UnitType("slime_king", "Slime King", DEMONS, hp=220, move=2,
                            skills=("slime_slam", "acid_spit", "split"), boss=True),
-    "goblin": UnitType("goblin", "Goblin", DEMONS, hp=30, move=3, skills=("stab",)),
-    "goblin_king": UnitType("goblin_king", "Goblin King", DEMONS, hp=190, move=3,
+    "goblin": UnitType("goblin", "Goblin", DEMONS, hp=92, move=3, skills=("stab",)),
+    "goblin_king": UnitType("goblin_king", "Goblin King", DEMONS, hp=220, move=3,
                             skills=("cleave", "spear_throw", "call_goblins"), boss=True),
-    "low_vampire": UnitType("low_vampire", "Low Vampire", DEMONS, hp=34, move=3, skills=("bite",)),
-    "vampire_lord": UnitType("vampire_lord", "Vampire Lord", DEMONS, hp=200, move=3,
+    "low_vampire": UnitType("low_vampire", "Low Vampire", DEMONS, hp=82, move=3, skills=("bite",)),
+    "vampire_lord": UnitType("vampire_lord", "Vampire Lord", DEMONS, hp=310, move=3,
                              skills=("blood_drain", "curse", "bat_swarm"), leap="mist_step",
                              boss=True),
-    "demon": UnitType("demon", "Demon", DEMONS, hp=40, move=2, skills=("demon_claw",)),
-    "legion_commander": UnitType("legion_commander", "Legion Commander", DEMONS, hp=220, move=2,
+    "demon": UnitType("demon", "Demon", DEMONS, hp=104, move=3, skills=("demon_claw",)),
+    "legion_commander": UnitType("legion_commander", "Legion Commander", DEMONS, hp=440, move=3,
                                  skills=("hellblade", "hellfire", "summon_imp"), boss=True),
-    "hell_demon": UnitType("hell_demon", "Hell Demon", DEMONS, hp=42, move=3,
+    "hell_demon": UnitType("hell_demon", "Hell Demon", DEMONS, hp=110, move=3,
                            skills=("fire_claw", "ember")),
 }
 
@@ -138,10 +138,10 @@ START_POSITIONS = {
 # ---- Ахиц (2026-11-09, PM): level, туршлага, item. Тэнцвэрийг туршилтаар тааруулна ----
 MAX_LEVEL = 10
 LEVEL_XP = (0, 100, 230, 400, 620, 890, 1210, 1580, 2000, 2470)   # level n-д хүрэх нийт XP (n=1..10)
-LEVEL_HP_GROWTH = 0.08       # level тутам max HP +8%
-LEVEL_POWER_GROWTH = 0.06    # level тутам хохирол / эдгээлт / бамбай +6%
-STAGE_XP = 50                # үе давахад баатар бүрт (× давхрын дугаар)
-BOSS_STAGE_XP = 140          # давхрын боссыг ялахад (× давхрын дугаар)
+LEVEL_HP_GROWTH = 0.06       # level тутам max HP +6%
+LEVEL_POWER_GROWTH = 0.05    # level тутам хохирол / эдгээлт / бамбай +5%
+STAGE_XP = 20                # үе давахад баатар бүрт (× давхрын дугаар)
+BOSS_STAGE_XP = 60          # давхрын боссыг ялахад (× давхрын дугаар)
 LOSS_XP_FRACTION = 0.3       # ялагдсан ч олсон XP-ийн хувь
 
 
@@ -156,16 +156,16 @@ class Item:
 
 
 ITEMS = {
-    "life_heart":   Item("life_heart", "Амьдралын зүрх", hp=12),
-    "iron_charm":   Item("iron_charm", "Төмөр сахиус", hp=20, rarity="rare"),
-    "sharp_edge":   Item("sharp_edge", "Хурц ир", power=0.06),
-    "rune_stone":   Item("rune_stone", "Рун чулуу", power=0.10, rarity="rare"),
+    "life_heart":   Item("life_heart", "Амьдралын зүрх", hp=8),
+    "iron_charm":   Item("iron_charm", "Төмөр сахиус", hp=14, rarity="rare"),
+    "sharp_edge":   Item("sharp_edge", "Хурц ир", power=0.04),
+    "rune_stone":   Item("rune_stone", "Рун чулуу", power=0.07, rarity="rare"),
     "swift_boots":  Item("swift_boots", "Хурдны гутал", move=1, rarity="rare"),
     # давхрын боссын баталгаатай олз
-    "slime_core":   Item("slime_core", "Нялцгайн цөм", hp=25, rarity="boss"),
-    "goblin_crown": Item("goblin_crown", "Гоблины титэм", power=0.12, rarity="boss"),
-    "vampire_fang": Item("vampire_fang", "Цус соруулын соёо", hp=15, power=0.08, rarity="boss"),
-    "legion_sigil": Item("legion_sigil", "Легионы тамга", hp=20, power=0.10, rarity="boss"),
+    "slime_core":   Item("slime_core", "Нялцгайн цөм", hp=14, rarity="boss"),
+    "goblin_crown": Item("goblin_crown", "Гоблины титэм", power=0.07, rarity="boss"),
+    "vampire_fang": Item("vampire_fang", "Цус соруулын соёо", hp=8, power=0.05, rarity="boss"),
+    "legion_sigil": Item("legion_sigil", "Легионы тамга", hp=12, power=0.06, rarity="boss"),
 }
 MAX_ITEMS_PER_HERO = 4
 ITEM_DROP_CHANCE = 0.45      # энгийн үе давахад item унах магадлал
@@ -173,5 +173,7 @@ RARE_DROP_CHANCE = 0.25      # унасан item rare байх магадлал
 BOSS_DROPS = {1: "slime_core", 2: "goblin_crown", 3: "vampire_fang", 4: "legion_sigil"}
 
 # Давхар бүрийн дайснуудын HP / хохирлын үржвэр (баатрууд level ахих тул)
-FLOOR_ENEMY_SCALE = {1: (1.0, 1.0), 2: (1.05, 1.05), 3: (1.1, 1.1), 4: (1.15, 1.15),
+FLOOR_ENEMY_SCALE = {1: (1.0, 1.0), 2: (1.1, 1.08), 3: (1.16, 1.12), 4: (1.3, 1.22),
                      5: (1.35, 1.2)}
+# Давхрын боссд FLOOR_ENEMY_SCALE дээр нэмж үржих (боссын тулааныг мангасын үеэс тусад нь тааруулна)
+BOSS_EXTRA_SCALE = {5: (1.4, 1.27)}

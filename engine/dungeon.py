@@ -16,7 +16,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Optional
 
-from .constants import FLOOR_ENEMY_SCALE, START_POSITIONS, UNIT_TYPES
+from .constants import BOSS_EXTRA_SCALE, FLOOR_ENEMY_SCALE, START_POSITIONS, UNIT_TYPES
 from .state import GameState
 
 STAGES_PER_FLOOR = 4
@@ -78,7 +78,7 @@ FLOORS = (
     )),
     Floor(4, "Чөтгөрийн легион", "demon", "legion_commander", ("demon", "imp"), (
         Stage(4, 1, _mobs("demon", [(2, 1), (5, 1)]) + _mobs("imp", [(4, 0)]), ((1, 3), (6, 3))),
-        Stage(4, 2, _mobs("demon", [(3, 1)]) + _mobs("imp", [(1, 0), (6, 0)]),
+        Stage(4, 2, _mobs("demon", [(3, 1), (6, 0)]) + _mobs("imp", [(1, 0)]),
               ((2, 4), (5, 4), (4, 2))),
         Stage(4, 3, _mobs("demon", [(1, 1), (4, 0), (6, 1)]), ((3, 3), (2, 2), (5, 3))),
         Stage(4, 4, (("legion_commander", "legion_commander", (4, 1)),)
@@ -109,17 +109,20 @@ def stage_encounter(stage: Stage) -> dict:
 
 
 def new_stage_state(stage: Stage, hero_stats: Optional[dict] = None) -> GameState:
-    """Үеийн эхлэх төлөв: дайснуудад давхрын хүч (FLOOR_ENEMY_SCALE), баатруудад ахиц.
+    """Үеийн эхлэх төлөв: дайснуудад давхрын хүч (FLOOR_ENEMY_SCALE, боссд нэмж BOSS_EXTRA_SCALE),
+    баатруудад ахиц.
 
     hero_stats = {uid: {"max_hp": int, "power_mult": float, "move": int, "level": int}}
     (engine/progression.py-ийн hero_stats()).
     """
     s = GameState.new_game(stage_encounter(stage))
     hp_mult, power_mult = FLOOR_ENEMY_SCALE.get(stage.floor, (1.0, 1.0))
+    boss_hp, boss_power = BOSS_EXTRA_SCALE.get(stage.floor, (1.0, 1.0))
     for uid, _, _ in stage.enemies:
         u = s.units[uid]
-        u.max_hp = u.hp = int(round(UNIT_TYPES[u.kind].hp * hp_mult))
-        u.power_mult = power_mult
+        extra_hp, extra_power = (boss_hp, boss_power) if u.type.boss else (1.0, 1.0)
+        u.max_hp = u.hp = int(round(UNIT_TYPES[u.kind].hp * hp_mult * extra_hp))
+        u.power_mult = round(power_mult * extra_power, 4)
         u.level = stage.floor
     for uid, st in (hero_stats or {}).items():
         u = s.units.get(uid)
