@@ -1,5 +1,8 @@
 """Үндсэн давталт (pygame): оролт → нүүдэл → анимаци → зурах, 60 FPS.
 
+Дэлгэц: "menu" (үндсэн цэс) → "game" (тоглоом, Esc-ээр түр зогсоно) → "result" (үр дүн).
+"help" (удирдлага) цэс болон түр зогсолтоос нээгдэнэ. Tab — «Боссын бодол» самбар.
+
 Хүний нүүдэл: хулгана/товчлуур → Selection → GameSession.play()
 Боссын нүүдэл: BossDriver (thread) → decision.actions-ийг нэг нэгээр нь GameSession.play()
 Хоёулаа GameSession-оор дамждаг тул on_action hook нүүдэл бүрт дуудагдана.
@@ -10,7 +13,7 @@ from __future__ import annotations
 import argparse
 import sys
 from collections import deque
-from typing import Optional
+from typing import Callable, Optional
 
 import pygame
 
@@ -20,32 +23,50 @@ from . import layout as L
 from . import theme as T
 from .anim import Animator
 from .board_view import BoardView
-from .boss_driver import BossDriver, make_boss
+from .boss_driver import BossDriver, PlaceholderBoss, ai_available, make_boss
+from .boss_panel import BossPanel
 from .hud import Hud
 from .input import Selection
 from .labels import event_text
+from .menu import Menu, MenuItem
+from .screens import Screens
 from .session import GameSession
+from .stats import MatchStats
 
 FPS = 60
 BOSS_STEP_DELAY = 0.5      # боссын нүүдэл хооронд (сек), тоглогч юу болсныг харах
+RESULT_DELAY = 1.6         # тоглолт дууссаны дараа үр дүнгийн дэлгэц гарах хүртэл (сек)
 LOG_LINES = 14
+BOSS_MODES = ("eval", "mcts")
+BOSS_MODE_LABELS = {"eval": "хурдан (үнэлгээ)", "mcts": "ухаалаг (MCTS)"}
 
 
 class App:
     def __init__(self, session: Optional[GameSession] = None, boss=None, fps: int = FPS,
-                 boss_step_delay: float = BOSS_STEP_DELAY):
+                 boss_step_delay: float = BOSS_STEP_DELAY,
+                 boss_factory: Optional[Callable[[str], object]] = None,
+                 boss_mode: str = "eval", start_screen: str = "menu",
+                 show_boss_panel: bool = True):
         pygame.init()
         pygame.display.set_caption("Outwold devourer")
-        self.screen = pygame.display.set_mode((L.SCREEN_W, L.SCREEN_H))
+        self.show_boss_panel = show_boss_panel
+        self.screen = pygame.display.set_mode(L.screen_size(show_boss_panel))
         self.clock = pygame.time.Clock()
         self.fps = fps
         self.text = T.Text()
         self.board = BoardView(self.text)
         self.hud = Hud(self.text)
+        self.panel_view = BossPanel(self.text)
+        self.screens = Screens(self.text)
 
         self.session = session if session is not None else GameSession()
         self.selection = Selection(self.session, side=self.session.human_side)
-        self.boss = BossDriver(boss if boss is not None else make_boss())
+        self.stats = MatchStats()
+        self.session.add_hook(self.stats.on_action)
+        self.fixed_boss = boss
+        self.boss_factory = boss_factory
+        self.boss_mode = boss_mode
+        self.boss = BossDriver(self._new_controller())
         self.boss_step_delay = boss_step_delay
         self.anim = Animator()
         self.log: deque = deque(maxlen=LOG_LINES)
@@ -53,10 +74,44 @@ class App:
         self.boss_phase = "idle"          # idle | thinking | acting
         self.boss_queue: deque = deque()
         self.boss_timer = 0.0
-        self.boss_panel = None            # «Боссын бодол» (11/29)
+        self.boss_panel = None            # decision.to_panel()
+        self.boss_panel_round = None
         self.hover = None
         self.mouse_pos = None
         self.running = True
+
+        self.screen_name = start_screen   # menu | help | game | result
+        self.paused = False
+        self.help_return = "menu"
+        self.over_timer = 0.0
+        self.main_menu = Menu(self._main_items(), top=270)
+        self.pause_menu = Menu([MenuItem("resume", "Үргэлжлүүлэх"),
+                                MenuItem("restart", "Шинээр эхлэх"),
+                                MenuItem("help", "Удирдлага"),
+                                MenuItem("menu", "Үндсэн цэс")], top=230)
+        self.result_menu = Menu([MenuItem("again", "Дахин тоглох"),
+                                 MenuItem("menu", "Үндсэн цэс")], top=410)
+
+    # ------------------------------------------------------------------ босс үүсгэх
+    def _new_controller(self):
+        if self.fixed_boss is not None:
+            return self.fixed_boss
+        factory = self.boss_factory or (lambda mode: make_boss(mode=mode))
+        return factory(self.boss_mode)
+
+    @property
+    def ai_connected(self) -> bool:
+        return not isinstance(self.boss.controller, PlaceholderBoss)
+
+    def _boss_mode_selectable(self) -> bool:
+        return self.fixed_boss is None and ai_available()
+
+    def _main_items(self) -> list:
+        return [MenuItem("play", "Тоглох"),
+                MenuItem("boss_mode", f"Босс: {BOSS_MODE_LABELS[self.boss_mode]}",
+                         enabled=self._boss_mode_selectable()),
+                MenuItem("help", "Удирдлага"),
+                MenuItem("quit", "Гарах")]
 
     # ------------------------------------------------------------------ нүүдэл
     @property
@@ -65,7 +120,7 @@ class App:
 
     @property
     def input_locked(self) -> bool:
-        return self.anim.busy or not self.session.human_to_act
+        return self.paused or self.anim.busy or not self.session.human_to_act
 
     def play(self, action) -> list:
         events = self.session.play(action)
@@ -80,22 +135,113 @@ class App:
         self.selection.refresh()
         return events
 
-    def restart(self) -> None:
+    def start_game(self) -> None:
+        """Шинэ тоглолт (цэснээс, түр зогсолтоос, үр дүнгээс)."""
         self.boss.cancel()
+        if self.fixed_boss is None:
+            self.boss = BossDriver(self._new_controller())
         self.session.reset()
+        self.stats.reset()
         self.selection.clear()
         self.anim.clear()
         self.log.clear()
         self.boss_phase = "idle"
         self.boss_queue.clear()
         self.boss_panel = None
+        self.boss_panel_round = None
+        self.over_timer = 0.0
+        self.paused = False
+        self.screen_name = "game"
+
+    restart = start_game
+
+    def go_menu(self) -> None:
+        self.boss.cancel()
+        self.boss_phase = "idle"
+        self.paused = False
+        self.screen_name = "menu"
+        self.main_menu.index = 0
+
+    def toggle_boss_panel(self) -> None:
+        self.show_boss_panel = not self.show_boss_panel
+        self.screen = pygame.display.set_mode(L.screen_size(self.show_boss_panel))
 
     # ------------------------------------------------------------------ оролт
     def handle_event(self, e) -> None:
         if e.type == pygame.QUIT:
             self.running = False
-        elif e.type == pygame.MOUSEMOTION:
+            return
+        if e.type == pygame.MOUSEMOTION:
             self.mouse_pos = e.pos
+        if e.type == pygame.KEYDOWN and e.key == pygame.K_TAB:
+            self.toggle_boss_panel()
+            return
+        if self.screen_name == "menu":
+            self._menu_event(self.main_menu, e, self._on_main)
+        elif self.screen_name == "help":
+            if e.type == pygame.KEYDOWN or (e.type == pygame.MOUSEBUTTONDOWN and e.button == 1):
+                self.screen_name = "game" if self.help_return == "pause" else "menu"
+        elif self.screen_name == "result":
+            if e.type == pygame.KEYDOWN and e.key == pygame.K_ESCAPE:
+                self.go_menu()
+            else:
+                self._menu_event(self.result_menu, e, self._on_result)
+        elif self.paused:
+            if e.type == pygame.KEYDOWN and e.key == pygame.K_ESCAPE:
+                self.paused = False
+            else:
+                self._menu_event(self.pause_menu, e, self._on_pause)
+        else:
+            self._game_event(e)
+
+    def _menu_event(self, menu: Menu, e, on_select) -> None:
+        w = self.screen.get_width()
+        if e.type == pygame.MOUSEMOTION:
+            menu.hover(e.pos, w)
+        elif e.type == pygame.MOUSEBUTTONDOWN and e.button == 1:
+            key = menu.click(e.pos, w)
+            if key is not None:
+                on_select(key)
+        elif e.type == pygame.KEYDOWN:
+            if e.key == pygame.K_UP:
+                menu.move(-1)
+            elif e.key == pygame.K_DOWN:
+                menu.move(1)
+            elif e.key in (pygame.K_RETURN, pygame.K_SPACE, pygame.K_KP_ENTER):
+                on_select(menu.selected)
+
+    def _on_main(self, key: str) -> None:
+        if key == "play":
+            self.start_game()
+        elif key == "boss_mode":
+            i = BOSS_MODES.index(self.boss_mode)
+            self.boss_mode = BOSS_MODES[(i + 1) % len(BOSS_MODES)]
+            self.main_menu.items = self._main_items()
+        elif key == "help":
+            self.help_return = "menu"
+            self.screen_name = "help"
+        elif key == "quit":
+            self.running = False
+
+    def _on_pause(self, key: str) -> None:
+        if key == "resume":
+            self.paused = False
+        elif key == "restart":
+            self.start_game()
+        elif key == "help":
+            self.help_return = "pause"
+            self.screen_name = "help"
+        elif key == "menu":
+            self.go_menu()
+
+    def _on_result(self, key: str) -> None:
+        if key == "again":
+            self.start_game()
+        elif key == "menu":
+            self.go_menu()
+
+    def _game_event(self, e) -> None:
+        if e.type == pygame.MOUSEMOTION:
             self.hover = L.cell_at(e.pos)
         elif e.type == pygame.MOUSEBUTTONDOWN:
             self.mouse_pos = e.pos
@@ -126,9 +272,13 @@ class App:
 
     def _key(self, key) -> None:
         if key == pygame.K_ESCAPE:
-            self.selection.back()
+            if self.selection.unit is not None:
+                self.selection.back()
+            else:
+                self.paused = True
+                self.pause_menu.index = 0
         elif key == pygame.K_r and self.state.is_over:
-            self.restart()
+            self.start_game()
         elif self.input_locked:
             return
         elif key in (pygame.K_e, pygame.K_RETURN):
@@ -170,6 +320,7 @@ class App:
             if decision is not None:
                 self.boss_queue = deque(decision.actions)
                 self.boss_panel = decision.to_panel()
+                self.boss_panel_round = s.round
                 self.boss_phase = "acting"
                 self.boss_timer = 0.0
         elif self.boss_phase == "acting":
@@ -194,15 +345,39 @@ class App:
             return f"Босс бодож байна{dots}"
         return ""
 
+    def update(self, dt: float) -> None:
+        if self.screen_name != "game" or self.paused:
+            return
+        self.anim.update(dt)
+        self.update_boss(dt)
+        if self.state.is_over and not self.anim.busy:
+            self.over_timer += dt
+            if self.over_timer >= RESULT_DELAY:
+                self.screen_name = "result"
+                self.result_menu.index = 0
+
     def step(self, dt: float) -> None:
         for e in pygame.event.get():
             self.handle_event(e)
-        self.anim.update(dt)
-        self.update_boss(dt)
+        self.update(dt)
         self.draw()
 
     def draw(self) -> None:
         self.screen.fill(T.BG)
+        if self.screen_name == "menu":
+            note = "" if self._boss_mode_selectable() else \
+                "Боссын AI (ai/) хараахан суугаагүй — түр босс тоглоно"
+            self.screens.draw_menu(self.screen, self.main_menu, self.mouse_pos, note)
+        elif self.screen_name == "help":
+            self.screens.draw_help(self.screen)
+        elif self.screen_name == "result":
+            self.screens.draw_result(self.screen, self.state, self.stats, self.result_menu,
+                                     self.mouse_pos)
+        else:
+            self._draw_game()
+        pygame.display.flip()
+
+    def _draw_game(self) -> None:
         interactive = not self.input_locked
         self.board.draw(self.screen, self.state, self.selection, self.anim,
                         self.hover if interactive else None, interactive)
@@ -210,10 +385,18 @@ class App:
                    "end_turn": interactive, "skills": interactive}
         hover_unit = self.state.unit_at(self.hover) if self.hover is not None else None
         self.hud.draw(self.screen, self.state, self.selection, self.log, self.status_text(),
-                      enabled, self.mouse_pos, hover_unit)
+                      enabled, self.mouse_pos, hover_unit,
+                      panel_hint=not self.show_boss_panel)
+        if self.show_boss_panel:
+            self.panel_view.draw(self.screen, self.boss_panel,
+                                 thinking=self.boss_phase == "thinking",
+                                 elapsed=self.boss.elapsed, enraged_now=self.state.boss_enraged,
+                                 decision_round=self.boss_panel_round,
+                                 ai_connected=self.ai_connected)
         if self.state.is_over and not self.anim.busy:
             self.hud.draw_game_over(self.screen, self.state)
-        pygame.display.flip()
+        if self.paused:
+            self.screens.draw_pause(self.screen, self.pause_menu, self.mouse_pos)
 
     def run(self, max_frames: Optional[int] = None) -> None:
         frames = 0
@@ -230,17 +413,19 @@ def main(argv=None) -> int:
     p = argparse.ArgumentParser(prog="python -m game", description="Outwold devourer")
     p.add_argument("--fps", type=int, default=FPS)
     p.add_argument("--seed", type=int, default=None, help="боссын санамсаргүй сонголтын seed")
+    p.add_argument("--boss-mode", choices=BOSS_MODES, default="eval",
+                   help="боссын AI-ийн горим (ai/ суусан үед)")
     p.add_argument("--placeholder-boss", action="store_true",
                    help="ai/ байсан ч түр боссыг ашиглах")
+    p.add_argument("--skip-menu", action="store_true", help="цэсгүйгээр шууд тоглоом эхлүүлэх")
     p.add_argument("--frames", type=int, default=None, help=argparse.SUPPRESS)
     args = p.parse_args(argv)
 
-    if args.placeholder_boss:
-        from .boss_driver import PlaceholderBoss
-        boss = PlaceholderBoss(seed=args.seed)
-    else:
-        boss = make_boss(mode="eval", seed=args.seed)
-    App(GameSession(human_side=HEROES), boss=boss, fps=args.fps).run(max_frames=args.frames)
+    boss = PlaceholderBoss(seed=args.seed) if args.placeholder_boss else None
+    app = App(GameSession(human_side=HEROES), boss=boss, fps=args.fps,
+              boss_factory=lambda mode: make_boss(mode=mode, seed=args.seed),
+              boss_mode=args.boss_mode, start_screen="game" if args.skip_menu else "menu")
+    app.run(max_frames=args.frames)
     return 0
 
 

@@ -537,3 +537,65 @@ def test_every_hero_skill_action_reachable_through_selection():
                         got.add(sel.armed_action())
         assert got == wanted, uid
         sel.clear()
+
+
+# ---------------------------------------------------------------- статистик, цэс (11/29)
+
+from game.menu import Menu, MenuItem  # noqa: E402
+from game.stats import MatchStats  # noqa: E402
+
+
+def test_match_stats_counts_from_hook():
+    stats = MatchStats()
+    session = GameSession(on_action=stats.on_action)
+    s = session.state
+    place(s, knight=(2, 3))
+    s.units["imp1"].hp = 15
+    s.units["mage"].hp = 40
+    session.play(Action("knight", (2, 2), "sword", (2, 1), "imp1"))       # Imp 1-ийг ална
+    session.play(Action("healer", s.units["healer"].pos, "heal", s.units["mage"].pos, "mage"))
+    assert stats.damage["knight"] == 20 and stats.kills["knight"] == 1   # engine-ийн amount (log-той ижил)
+    assert stats.deaths["imp1"] == 1 and stats.heal["healer"] == 30
+    assert stats.skills["knight"] == 1
+    rows = stats.rows(s)
+    assert [r["side"] for r in rows][:3] == [HEROES] * 3
+    imp = next(r for r in rows if r["uid"] == "imp1")
+    assert not imp["alive"] and imp["deaths"] == 1
+    assert stats.mvp(HEROES, s) == "healer"        # 30 эдгээлт > 20 хохирол
+    assert stats.mvp(DEMONS, s) is None
+    stats.reset()
+    assert stats.damage["knight"] == 0 and stats.winner is None
+
+
+def test_match_stats_records_winner():
+    stats = MatchStats()
+    stats.on_action(None, END_TURN, [{"type": "game_over", "winner": DEMONS, "round": 7}])
+    assert stats.winner == DEMONS and stats.rounds == 7
+
+
+def test_menu_navigation_skips_disabled_and_hit_tests():
+    menu = Menu([MenuItem("a", "A"), MenuItem("b", "B", enabled=False), MenuItem("c", "C")],
+                top=100)
+    assert menu.selected == "a"
+    menu.move(1)
+    assert menu.selected == "c"                   # b идэвхгүй тул алгасна
+    menu.move(1)
+    assert menu.selected == "a"
+    menu.move(-1)
+    assert menu.selected == "c"
+    rects = menu.rects(800)
+    bx, by, bw, bh = rects[1]
+    assert menu.click((bx + 5, by + 5), 800) is None          # идэвхгүй товч
+    cx, cy, cw, ch = rects[0]
+    assert menu.click((cx + 5, cy + 5), 800) == "a" and menu.index == 0
+    assert menu.item_at((0, 0), 800) is None
+    first_disabled = Menu([MenuItem("x", "X", enabled=False), MenuItem("y", "Y")], top=0)
+    assert first_disabled.selected == "y"
+
+
+def test_screen_sizes_and_menu_buttons_centered():
+    assert layout.screen_size(False) == (layout.SCREEN_W, layout.SCREEN_H)
+    wide = layout.screen_size(True)
+    assert wide[0] == layout.BOSS_PANEL_X + layout.BOSS_PANEL_W + layout.MARGIN
+    for x, y, w, h in layout.menu_buttons(3, 1000, 50):
+        assert x + w / 2 == 500

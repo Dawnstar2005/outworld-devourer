@@ -34,11 +34,14 @@ class Hud:
         self.text = text
 
     def draw(self, surf, state, selection, log_lines, status, buttons_enabled, mouse_pos,
-             hover_unit=None):
+             hover_unit=None, panel_hint=False):
         self._top_bar(surf, state, status, hint_text(selection))
         pygame.draw.rect(surf, T.PANEL_BG, (L.PANEL_X, L.PANEL_Y, L.PANEL_W, L.PANEL_H),
                          border_radius=8)
         self._units(surf, state, selection, L.UNITS_Y)
+        if panel_hint:   # «Боссын бодол» хаалттай үед хаана нээхийг сануулна
+            self.text.draw(surf, "Tab — Боссын бодол", (L.PANEL_X + L.PANEL_W - 12, L.UNITS_Y + 2),
+                           16, T.TEXT_DIM, anchor="topright")
         info = selection.unit or hover_unit
         self._info(surf, state, selection, info, mouse_pos, buttons_enabled.get("skills", False))
         self._log(surf, log_lines, L.LOG_Y)

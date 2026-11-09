@@ -22,6 +22,22 @@ PANEL_H = BOARD_PX_H
 SCREEN_W = PANEL_X + PANEL_W + MARGIN
 SCREEN_H = BOARD_Y + BOARD_PX_H + MARGIN
 
+# «Боссын бодол» самбар — баатрын самбарын баруун талд. Tab дарахад цонх баруун тийш
+# өргөсөж/агшина, тиймээс талбар, товчны байрлал өөрчлөгдөхгүй.
+BOSS_PANEL_X = SCREEN_W
+BOSS_PANEL_W = 300
+SCREEN_W_WIDE = BOSS_PANEL_X + BOSS_PANEL_W + MARGIN
+
+
+def screen_size(boss_panel: bool) -> tuple:
+    return (SCREEN_W_WIDE if boss_panel else SCREEN_W, SCREEN_H)
+
+
+def menu_buttons(n: int, screen_w: int, top: int, w: int = 320, h: int = 50, gap: int = 12):
+    """Цонхны голд босоо байрлах n товчны тэгш өнцөгт."""
+    x = (screen_w - w) // 2
+    return [(x, top + i * (h + gap), w, h) for i in range(n)]
+
 BUTTON_H = 44
 BUTTON_GAP = 8
 _half = (PANEL_W - BUTTON_GAP) // 2

@@ -62,6 +62,15 @@ class PlaceholderBoss:
         return min(acts, key=lambda a: (min(dist(a.dest, e) for e in enemies), self.rng.random()))
 
 
+def ai_available() -> bool:
+    """`ai/` (боссын AI) суусан эсэх — импорт хийхгүйгээр шалгана."""
+    import importlib.util
+    try:
+        return importlib.util.find_spec("ai") is not None
+    except (ImportError, ValueError):
+        return False
+
+
 def make_boss(mode: str = "eval", profile: Optional[dict] = None, seed: Optional[int] = None):
     """`ai.BossAI` байвал түүнийг, үгүй бол PlaceholderBoss буцаана."""
     try:

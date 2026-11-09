@@ -19,7 +19,7 @@ def app(monkeypatch):
     from game.session import GameSession
     calls = []
     session = GameSession(on_action=lambda before, a, ev: calls.append(a))
-    a = App(session, boss=PlaceholderBoss(seed=0), boss_step_delay=0.0)
+    a = App(session, boss=PlaceholderBoss(seed=0), boss_step_delay=0.0, start_screen="game")
     a.hook_calls = calls
     yield a
     pygame.quit()
@@ -185,3 +185,150 @@ def test_status_badges_draw(app):
     s.walls[(0, 4)] = 2
     app.hover = s.units["demon_lord"].pos
     app.draw()
+
+
+# ---------------------------------------------------------------- цэс, самбар, үр дүн (11/29)
+
+class FakeDecision:
+    def __init__(self, actions, panel):
+        self.actions = actions
+        self._panel = panel
+
+    def to_panel(self):
+        return self._panel
+
+
+class FakeAIBoss:
+    """ai.BossAI-тай ижил интерфейс: decide() → actions + to_panel()."""
+    panel = {"habits": ["Healer-т их найддаг (эдгээлт 8/тулаан)"],
+             "options": [{"label": "Сүүдрийн үсрэлт → Хар дөл Mage-т", "score": 0.57,
+                          "chosen": True},
+                         {"label": "Тамын гал (Knight + Healer)", "score": 0.54, "chosen": False},
+                         {"label": "Хар дөл Mage-т", "score": 0.53, "chosen": False}],
+             "enraged": True, "random_pick": False, "ms": 1003, "mode": "mcts",
+             "iterations": 4800}
+
+    def decide(self, state):
+        from game.boss_driver import PlaceholderBoss
+        return FakeDecision(PlaceholderBoss(seed=0).decide(state).actions, dict(self.panel))
+
+
+def make_app(monkeypatch, **kw):
+    monkeypatch.setenv("SDL_VIDEODRIVER", "dummy")
+    from game.app import App
+    kw.setdefault("boss_step_delay", 0.0)
+    return App(**kw)
+
+
+def test_menu_play_pause_and_back_to_menu(monkeypatch):
+    from game.boss_driver import PlaceholderBoss
+    app = make_app(monkeypatch, boss=PlaceholderBoss(seed=0))
+    assert app.screen_name == "menu"
+    app.draw()
+    key(app, pygame.K_RETURN)                         # «Тоглох»
+    assert app.screen_name == "game" and not app.paused
+    key(app, pygame.K_ESCAPE)                         # сонголтгүй үед түр зогсоно
+    assert app.paused
+    app.draw()
+    knight = app.state.units["knight"]
+    click(app, layout.cell_center(knight.pos))
+    assert app.selection.unit_uid is None             # түр зогссон үед талбар хаалттай
+    for _ in range(3):
+        key(app, pygame.K_DOWN)
+    assert app.pause_menu.selected == "menu"
+    key(app, pygame.K_RETURN)
+    assert app.screen_name == "menu" and not app.paused
+    pygame.quit()
+
+
+def test_help_from_pause_returns_to_pause(monkeypatch):
+    from game.boss_driver import PlaceholderBoss
+    app = make_app(monkeypatch, boss=PlaceholderBoss(seed=0), start_screen="game")
+    key(app, pygame.K_ESCAPE)
+    app.pause_menu.index = 2                          # «Удирдлага»
+    key(app, pygame.K_RETURN)
+    assert app.screen_name == "help"
+    app.draw()
+    key(app, pygame.K_ESCAPE)
+    assert app.screen_name == "game" and app.paused
+    key(app, pygame.K_ESCAPE)
+    assert not app.paused
+    pygame.quit()
+
+
+def test_tab_toggles_boss_panel_and_window_width(monkeypatch):
+    from game.boss_driver import PlaceholderBoss
+    app = make_app(monkeypatch, boss=PlaceholderBoss(seed=0), start_screen="game")
+    assert app.show_boss_panel and app.screen.get_width() == layout.SCREEN_W_WIDE
+    app.draw()
+    key(app, pygame.K_TAB)
+    assert not app.show_boss_panel and app.screen.get_width() == layout.SCREEN_W
+    app.draw()
+    key(app, pygame.K_TAB)
+    assert app.screen.get_width() == layout.SCREEN_W_WIDE
+    assert not app.ai_connected                       # түр босс → тайлбар харагдана
+    pygame.quit()
+
+
+def test_boss_panel_shows_ai_decision(monkeypatch):
+    app = make_app(monkeypatch, boss=FakeAIBoss(), start_screen="game")
+    assert app.ai_connected
+    x, y, w, h = layout.BUTTONS["end_turn"]
+    click(app, (x + w / 2, y + h / 2))
+    app.step(0.016)
+    assert app.boss_phase == "thinking"
+    assert run_until(app, lambda: app.boss_panel is not None)
+    assert app.boss_panel["options"][0]["chosen"] and app.boss_panel_round == 1
+    app.draw()
+    assert run_until(app, lambda: app.state.side_to_act == HEROES or app.state.is_over)
+    pygame.quit()
+
+
+def test_result_screen_after_game_over_and_play_again(monkeypatch):
+    from engine import Action
+    from game.boss_driver import PlaceholderBoss
+    app = make_app(monkeypatch, boss=PlaceholderBoss(seed=0), start_screen="game")
+    s = app.state
+    s.units["knight"].x, s.units["knight"].y = (4, 2)
+    s.units["demon_lord"].hp = 15
+    app.play(Action("knight", (4, 2), "sword", (4, 1), "demon_lord"))
+    assert app.state.winner == HEROES and app.stats.kills["knight"] == 1
+    assert run_until(app, lambda: app.screen_name == "result")
+    app.draw()
+    key(app, pygame.K_RETURN)                         # «Дахин тоглох»
+    assert app.screen_name == "game" and not app.state.is_over
+    assert app.stats.kills["knight"] == 0
+    pygame.quit()
+
+
+def test_boss_mode_toggle_creates_boss_with_mode(monkeypatch):
+    import game.app as app_mod
+    from game.boss_driver import PlaceholderBoss
+    monkeypatch.setattr(app_mod, "ai_available", lambda: True)
+    modes = []
+
+    def factory(mode):
+        modes.append(mode)
+        return PlaceholderBoss(seed=0)
+
+    app = make_app(monkeypatch, boss_factory=factory)
+    assert app.main_menu.items[1].enabled
+    key(app, pygame.K_DOWN)
+    key(app, pygame.K_RETURN)                         # «Босс: ...» → mcts
+    assert app.boss_mode == "mcts" and "MCTS" in app.main_menu.items[1].label
+    app.main_menu.index = 0
+    key(app, pygame.K_RETURN)
+    assert modes == ["eval", "mcts"]                  # эхлэхэд + шинэ тоглолтод
+    pygame.quit()
+
+
+def test_boss_mode_disabled_without_ai(monkeypatch):
+    import game.app as app_mod
+    from game.boss_driver import PlaceholderBoss
+    monkeypatch.setattr(app_mod, "ai_available", lambda: False)
+    app = make_app(monkeypatch, boss_factory=lambda mode: PlaceholderBoss(seed=0))
+    assert not app.main_menu.items[1].enabled
+    key(app, pygame.K_DOWN)
+    assert app.main_menu.selected == "help"
+    app.draw()
+    pygame.quit()
