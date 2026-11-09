@@ -88,6 +88,7 @@ PDF-д тодорхойгүй байсан утгыг (`constants.py`-д `TBD (G
 from ai import BossAI
 
 boss = BossAI(profile=None)              # profile: DQ-ийн зуршлын профайл (dict), None = суралцдаггүй
+                                         # mode="mcts" (default, ~1 сек) эсвэл "eval" (~10 мс)
 # боссын ээлж ирэхэд:
 decision, events = boss.play_turn(state) # state-ийг шууд өөрчилнө, events-ээр анимаци хийнэ
 panel = decision.to_panel()              # «Боссын бодол» самбар
@@ -99,7 +100,7 @@ panel = decision.to_panel()              # «Боссын бодол» самб�
  "options": [{"label": "Сүүдрийн үсрэлт → Хар дөл Mage-т", "score": 0.57, "chosen": True},
              {"label": "Сүүдрийн үсрэлт → Тамын гал (Mage)", "score": 0.54, "chosen": False},
              {"label": "Хар дөл Mage-т", "score": 0.53, "chosen": False}],
- "enraged": False, "random_pick": False, "ms": 7}
+ "enraged": False, "random_pick": False, "ms": 1003, "mode": "mcts", "iterations": 4800}
 ```
 Хурдан хэмжих: `python -m ai.bench --games 20 --heroes greedy -v`.
 
@@ -109,4 +110,17 @@ panel = decision.to_panel()              # «Боссын бодол» самб�
  "habits": ["Healer-т их найддаг (эдгээлт 8/тулаан)", "Healer Knight-ийн ард нуугддаг"]}
 ```
 `target_priority` — баатар бүрийн аюулын түвшин (default 1.0 / 1.3 / 1.4). Өндөр бол босс түүнийг түрүүлж онилно.
-`habits` — самбарт харуулах мөрүүд. Таамаглагчийн гаралтын форматыг MCTS-ийн үед (11/25) нэмнэ.
+`habits` — самбарт харуулах мөрүүд.
+
+### Таамаглагч (DQ → AI)
+MCTS тоглогчийн хариу нүүдлийг таамаглахдаа DQ-ийн таамаглагчийг ашиглана:
+```python
+def predictor(state, unit_uid, actions) -> list[float]:   # len == len(actions), магадлал/жин
+    ...
+boss = BossAI(profile=profile, predictor=predictor)
+```
+Өгөхгүй бол баатрууд «ихэвчлэн шунахай» тоглоно гэж таамаглана.
+
+**Анхаар:** MCTS шийдвэр ~1 секунд үргэлжилнэ. UI царцахгүйн тулд `boss.decide()`-г
+тусдаа thread-д ажиллуулж, хооронд нь «Босс бодож байна...» харуулна. Дараа нь
+`decision.actions`-ийг нэг нэгээр нь `apply()` хийж анимацлана.
