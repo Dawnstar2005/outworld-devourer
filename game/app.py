@@ -35,7 +35,7 @@ class App:
     def __init__(self, session: Optional[GameSession] = None, boss=None, fps: int = FPS,
                  boss_step_delay: float = BOSS_STEP_DELAY):
         pygame.init()
-        pygame.display.set_caption("Outwold devourer")
+        pygame.display.set_caption("Outworld Devourer")
         self.screen = pygame.display.set_mode((L.SCREEN_W, L.SCREEN_H))
         self.clock = pygame.time.Clock()
         self.fps = fps
@@ -219,7 +219,7 @@ class App:
 
 
 def main(argv=None) -> int:
-    p = argparse.ArgumentParser(prog="python -m game", description="Outwold devourer")
+    p = argparse.ArgumentParser(prog="python -m game", description="Outworld Devourer")
     p.add_argument("--fps", type=int, default=FPS)
     p.add_argument("--seed", type=int, default=None, help="боссын санамсаргүй сонголтын seed")
     p.add_argument("--placeholder-boss", action="store_true",
