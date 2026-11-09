@@ -18,12 +18,14 @@ CONTROLS = [
     ("E  /  Enter", "Ээлж дуусгах"),
     ("Баруун товч  /  Esc", "Нэг алхам буцах, сонголтгүй бол түр зогсоох"),
     ("Tab", "«Боссын бодол» самбар нээх / хаах"),
+    ("M", "Дуу асаах / унтраах"),
 ]
 
 
 class Screens:
-    def __init__(self, text: T.Text):
+    def __init__(self, text: T.Text, sprites=None):
         self.text = text
+        self.sprites = sprites if sprites is not None and sprites.ok else None
 
     # ---- нийтлэг ----
     def _buttons(self, surf, menu, mouse_pos):
@@ -52,9 +54,20 @@ class Screens:
             else:
                 kind, letter = k
                 r = pygame.Rect(x, y, size, size)
-                pygame.draw.rect(surf, T.UNIT_COLORS[kind], r, border_radius=8)
-                self.text.draw(surf, letter, r.center, 28, (255, 255, 255), bold=True,
-                               anchor="center")
+                sprite = self.sprites.unit(kind) if self.sprites else None
+                if sprite is not None:
+                    plate = pygame.Surface((size, size), pygame.SRCALPHA)
+                    pygame.draw.rect(plate, T.UNIT_COLORS[kind] + (95,), plate.get_rect(),
+                                     border_radius=8)
+                    pygame.draw.rect(plate, T.UNIT_COLORS[kind], plate.get_rect(), 2,
+                                     border_radius=8)
+                    surf.blit(plate, r)
+                    img = pygame.transform.scale(sprite, (size - 6, size - 6))
+                    surf.blit(img, img.get_rect(center=r.center))
+                else:
+                    pygame.draw.rect(surf, T.UNIT_COLORS[kind], r, border_radius=8)
+                    self.text.draw(surf, letter, r.center, 28, (255, 255, 255), bold=True,
+                                   anchor="center")
             x += size + gap
 
     # ---- үндсэн цэс ----

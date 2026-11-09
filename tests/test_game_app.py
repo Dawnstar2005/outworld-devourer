@@ -215,6 +215,7 @@ class FakeAIBoss:
 
 def make_app(monkeypatch, **kw):
     monkeypatch.setenv("SDL_VIDEODRIVER", "dummy")
+    monkeypatch.setenv("SDL_AUDIODRIVER", "dummy")
     from game.app import App
     kw.setdefault("boss_step_delay", 0.0)
     return App(**kw)
@@ -332,3 +333,53 @@ def test_boss_mode_disabled_without_ai(monkeypatch):
     assert app.main_menu.selected == "help"
     app.draw()
     pygame.quit()
+
+
+# ---------------------------------------------------------------- sprite, дуу (11/29)
+
+def test_sprites_load_and_fallback(app, tmp_path):
+    from game.sprites import Sprites
+    sp = app.sprites
+    assert sp.ok and sp.unit("knight").get_size() == (48, 48)
+    assert sp.unit("imp", dim=True) is not None and sp.wall is not None
+    assert sp.floor(0, 0).get_size() == (layout.CELL, layout.CELL)
+    missing = Sprites(48, layout.CELL, folder=tmp_path)          # хоосон хавтас
+    assert not missing.ok and missing.unit("knight") is None and missing.floor(1, 1) is None
+    from game.board_view import BoardView
+    BoardView(app.text, missing).draw(app.screen, app.state, app.selection, app.anim, None, True)
+
+
+def test_asset_dir_inside_pyinstaller_bundle(monkeypatch, tmp_path):
+    import sys
+    from game.sprites import asset_dir
+    monkeypatch.setattr(sys, "_MEIPASS", str(tmp_path), raising=False)
+    assert asset_dir() == tmp_path / "game" / "assets"
+
+
+def test_sound_player_safe_and_mute_key(app, tmp_path):
+    from game.sound import SoundPlayer
+    assert SoundPlayer(enabled=False).ok is False
+    broken = SoundPlayer(folder=tmp_path)                          # файлгүй — алдаагүй чимээгүй
+    assert not broken.ok
+    broken.play("slash")
+    assert app.sound.ok                                            # dummy audio driver дээр ачаална
+    key(app, pygame.K_m)
+    assert app.sound.muted and "Дуу унтраалттай" in app.status_text()
+    app.sound.play("slash")                                        # muted — юу ч болохгүй
+    key(app, pygame.K_m)
+    assert not app.sound.muted
+
+
+def test_ui_sounds_follow_selection(app, monkeypatch):
+    played = []
+    monkeypatch.setattr(app.sound, "play", played.append)
+    s = app.state
+    s.units["knight"].x, s.units["knight"].y = (4, 3)
+    s.units["knight"].cooldowns["taunt"] = 2
+    click(app, layout.cell_center((4, 3)))
+    click(app, layout.cell_center((4, 2)))
+    key(app, pygame.K_2)                                           # cooldown
+    key(app, pygame.K_1)
+    click(app, layout.cell_center((4, 1)))                         # Сэлэм
+    assert played[:4] == ["select", "tick", "error", "tick"]
+    assert "slash" in played and "step" in played

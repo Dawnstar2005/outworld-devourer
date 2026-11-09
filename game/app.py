@@ -31,12 +31,15 @@ from .labels import event_text
 from .menu import Menu, MenuItem
 from .screens import Screens
 from .session import GameSession
+from .sound import SoundPlayer
+from .sprites import Sprites
 from .stats import MatchStats
 
 FPS = 60
 BOSS_STEP_DELAY = 0.5      # боссын нүүдэл хооронд (сек), тоглогч юу болсныг харах
 RESULT_DELAY = 1.6         # тоглолт дууссаны дараа үр дүнгийн дэлгэц гарах хүртэл (сек)
 LOG_LINES = 14
+SPRITE_SIZE = 48           # 16px sprite × 3 (pixel art бүхэл тоогоор томруулна)
 BOSS_MODES = ("eval", "mcts")
 BOSS_MODE_LABELS = {"eval": "хурдан (үнэлгээ)", "mcts": "ухаалаг (MCTS)"}
 
@@ -46,7 +49,8 @@ class App:
                  boss_step_delay: float = BOSS_STEP_DELAY,
                  boss_factory: Optional[Callable[[str], object]] = None,
                  boss_mode: str = "eval", start_screen: str = "menu",
-                 show_boss_panel: bool = True):
+                 show_boss_panel: bool = True, sound: bool = True):
+        pygame.mixer.pre_init(44100, -16, 2, 512)   # дууны саатлыг багасгана
         pygame.init()
         pygame.display.set_caption("Outwold devourer")
         self.show_boss_panel = show_boss_panel
@@ -54,10 +58,12 @@ class App:
         self.clock = pygame.time.Clock()
         self.fps = fps
         self.text = T.Text()
-        self.board = BoardView(self.text)
+        self.sprites = Sprites(SPRITE_SIZE, L.CELL)
+        self.sound = SoundPlayer(enabled=sound)
+        self.board = BoardView(self.text, self.sprites)
         self.hud = Hud(self.text)
         self.panel_view = BossPanel(self.text)
-        self.screens = Screens(self.text)
+        self.screens = Screens(self.text, self.sprites)
 
         self.session = session if session is not None else GameSession()
         self.selection = Selection(self.session, side=self.session.human_side)
@@ -125,6 +131,7 @@ class App:
     def play(self, action) -> list:
         events = self.session.play(action)
         self.anim.push(events, self.state)
+        self.sound.play_events(events, self.session.human_side)
         for ev in events:
             if ev["type"] == "turn_start":   # ээлж солигдсон: боссын өмнөх ээлжийн төлөвийг цэвэрлэнэ
                 self.boss_phase = "idle"
@@ -176,10 +183,14 @@ class App:
         if e.type == pygame.KEYDOWN and e.key == pygame.K_TAB:
             self.toggle_boss_panel()
             return
+        if e.type == pygame.KEYDOWN and e.key == pygame.K_m:
+            self.sound.toggle_mute()
+            return
         if self.screen_name == "menu":
             self._menu_event(self.main_menu, e, self._on_main)
         elif self.screen_name == "help":
             if e.type == pygame.KEYDOWN or (e.type == pygame.MOUSEBUTTONDOWN and e.button == 1):
+                self.sound.play("back")
                 self.screen_name = "game" if self.help_return == "pause" else "menu"
         elif self.screen_name == "result":
             if e.type == pygame.KEYDOWN and e.key == pygame.K_ESCAPE:
@@ -197,17 +208,21 @@ class App:
     def _menu_event(self, menu: Menu, e, on_select) -> None:
         w = self.screen.get_width()
         if e.type == pygame.MOUSEMOTION:
+            before = menu.index
             menu.hover(e.pos, w)
+            if menu.index != before:
+                self.sound.play("tick")
         elif e.type == pygame.MOUSEBUTTONDOWN and e.button == 1:
             key = menu.click(e.pos, w)
             if key is not None:
+                self.sound.play("click")
                 on_select(key)
         elif e.type == pygame.KEYDOWN:
-            if e.key == pygame.K_UP:
-                menu.move(-1)
-            elif e.key == pygame.K_DOWN:
-                menu.move(1)
+            if e.key in (pygame.K_UP, pygame.K_DOWN):
+                menu.move(-1 if e.key == pygame.K_UP else 1)
+                self.sound.play("tick")
             elif e.key in (pygame.K_RETURN, pygame.K_SPACE, pygame.K_KP_ENTER):
+                self.sound.play("click")
                 on_select(menu.selected)
 
     def _on_main(self, key: str) -> None:
@@ -241,6 +256,29 @@ class App:
             self.go_menu()
 
     def _game_event(self, e) -> None:
+        sel = self.selection
+        before = (sel.unit_uid, sel.dest, sel.skill, self.state.side_to_act, self.paused)
+        self._game_input(e)
+        self._ui_sound(e, before)
+
+    def _ui_sound(self, e, before) -> None:
+        """Сонголт өөрчлөгдөхөд богино дуу (нүүдлийн дуу play()-д тоглогдоно)."""
+        if e.type not in (pygame.MOUSEBUTTONDOWN, pygame.KEYDOWN, pygame.MOUSEWHEEL):
+            return
+        sel = self.selection
+        uid, dest, skill, side, paused = before
+        if self.paused != paused:
+            self.sound.play("click")
+        elif sel.unit_uid is not None and sel.unit_uid != uid:
+            self.sound.play("select")
+        elif sel.unit_uid is not None and (sel.skill != skill or sel.dest != dest):
+            self.sound.play("tick" if sel.skill is not None or sel.dest != dest else "back")
+        elif uid is not None and sel.unit_uid is None and self.state.units[uid].acted is False                 and self.state.side_to_act == side:
+            self.sound.play("back")                   # нүүдэлгүйгээр цуцлагдсан
+        elif getattr(e, "key", None) in (pygame.K_1, pygame.K_2, pygame.K_3, pygame.K_4)                 and sel.unit_uid is not None and sel.skill == skill:
+            self.sound.play("error")                  # cooldown / бай алга
+
+    def _game_input(self, e) -> None:
         if e.type == pygame.MOUSEMOTION:
             self.hover = L.cell_at(e.pos)
         elif e.type == pygame.MOUSEBUTTONDOWN:
@@ -343,6 +381,8 @@ class App:
         if self.boss_phase == "thinking":
             dots = "." * (1 + int(self.boss.elapsed * 3) % 3)
             return f"Босс бодож байна{dots}"
+        if self.sound.muted:
+            return "Дуу унтраалттай (M)"
         return ""
 
     def update(self, dt: float) -> None:

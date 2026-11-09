@@ -32,7 +32,8 @@ def fresh():
 
 def test_logic_modules_do_not_import_pygame():
     code = ("import sys; import game.input, game.session, game.boss_driver, game.anim, "
-            "game.labels, game.layout; print('pygame' in sys.modules)")
+            "game.labels, game.layout, game.stats, game.menu, game.sound; "
+            "print('pygame' in sys.modules)")
     out = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, check=True)
     assert out.stdout.strip() == "False"
 
@@ -599,3 +600,41 @@ def test_screen_sizes_and_menu_buttons_centered():
     assert wide[0] == layout.BOSS_PANEL_X + layout.BOSS_PANEL_W + layout.MARGIN
     for x, y, w, h in layout.menu_buttons(3, 1000, 50):
         assert x + w / 2 == 500
+
+
+# ---------------------------------------------------------------- дуу (11/29)
+
+from game.sound import SOUND_FILES, sounds_for_events  # noqa: E402
+
+
+def test_sounds_for_events_mapping():
+    ev = [{"type": "move", "unit": "knight", "from": (3, 6), "to": (3, 5), "leap": False},
+          {"type": "skill", "unit": "knight", "skill": "sword", "target": (3, 4),
+           "target_uid": "imp1"},
+          {"type": "damage", "src": "knight", "dst": "imp1", "amount": 20, "absorbed": 0, "hp": 0},
+          {"type": "death", "unit": "imp1"},
+          {"type": "turn_end", "side": HEROES, "round": 1},
+          {"type": "turn_start", "side": DEMONS, "round": 1}]
+    assert sounds_for_events(ev) == ["step", "slash", "death"]
+    assert sounds_for_events([{"type": "turn_start", "side": HEROES, "round": 2}]) == ["your_turn"]
+    assert sounds_for_events([{"type": "move", "unit": "demon_lord", "from": (4, 1),
+                               "to": (4, 6), "leap": True}]) == ["leap"]
+    over = [{"type": "turn_start", "side": HEROES, "round": 3},
+            {"type": "game_over", "winner": DEMONS, "round": 3}]
+    assert sounds_for_events(over) == ["lose"]
+    assert sounds_for_events([{"type": "game_over", "winner": HEROES, "round": 3}]) == ["win"]
+    two_hits = [{"type": "skill", "unit": "mage", "skill": "fireball", "target": (3, 1),
+                 "target_uid": None}, {"type": "death", "unit": "imp1"},
+                {"type": "death", "unit": "imp2"}]
+    assert sounds_for_events(two_hits) == ["blast", "death"]        # давхардалгүй
+
+
+def test_every_skill_and_sound_has_a_file():
+    import os
+    from engine import SKILLS
+    from game.sound import SKILL_SOUNDS
+    folder = os.path.join(os.path.dirname(layout.__file__), "assets", "sounds")
+    for name, file in SOUND_FILES.items():
+        assert os.path.isfile(os.path.join(folder, file)), file
+    assert set(SKILL_SOUNDS) == set(SKILLS) - {"shadow_leap"}       # үсрэлт move event-ээр
+    assert set(SKILL_SOUNDS.values()) <= set(SOUND_FILES)
