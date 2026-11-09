@@ -28,6 +28,42 @@ python -m pip install -r requirements.txt
 python -m pytest -q
 ```
 
+## Тоглоом ажиллуулах (`game/`)
+
+```bash
+python -m game                      # 60 FPS цонх
+python -m game --placeholder-boss   # ai/ байсан ч түр боссоор тоглох
+```
+
+| Үйлдэл | Удирдлага |
+|---|---|
+| Баатар сонгох | Баатар дээр зүүн товч |
+| Хөдлөх | Тодорсон (цэнхэр) нүдэн дээр зүүн товч |
+| Байрандаа хүлээх | `W` / Space / «Хүлээх» товч |
+| Ээлж дуусгах | `E` / Enter / «Ээлж дуусгах» товч |
+| Сонголт цуцлах | Баруун товч / Esc |
+| Дахин эхлэх (тоглолт дууссаны дараа) | `R` |
+
+Босс `ai/` main-д ороогүй үед түр `PlaceholderBoss`-оор нүүнэ. `ai` байвал автоматаар
+`BossAI(mode="eval")`-ийг ашиглана. Боссын шийдвэрийг тусдаа thread-д тооцоолдог (`game/boss_driver.py`),
+энэ хугацаанд «Босс бодож байна...» гэж харагдана.
+
+Сонголтын логик (`game/input.py`), session (`game/session.py`), боссын thread зэрэг нь pygame-гүй,
+`tests/test_game_input.py`-д тестлэгдсэн. `tests/test_game_app.py` нь App-ийг дэлгэцгүй (SDL dummy) ажиллуулна.
+
+### DQ log-д: `on_action` hook
+Хүний болон боссын нүүдэл бүр `GameSession.play()`-ээр дамждаг, нүүдэл бүрийн дараа hook дуудагдана:
+```python
+from game.app import App
+from game.session import GameSession
+
+def on_action(state_before, action, events):
+    # state_before.to_dict(), action.to_dict(), events — JSON-д бичихэд бэлэн
+    ...
+
+App(GameSession(on_action=on_action)).run()   # эсвэл session.add_hook(fn)
+```
+
 ## `engine` API (GD, DQ-д зориулав)
 
 ```python
