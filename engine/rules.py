@@ -15,15 +15,23 @@
 * Хараал, Taunt нь нөлөөлсөн дүрийн өөрийн ээлж дуусах бүрт 1-ээр буурна
   (жишээ нь Taunt нь боссын дараагийн 2 ээлжид үйлчилнэ).
 * Мөсөн хана DEMONS-ийн ээлж дуусах бүрт 1-ээр буурна (боссын 2 ээлжийг хаана).
-* Taunt-д орсон дайсны НЭГ БАЙТАЙ ур чадвар (damage, curse) Taunt хийсэн дүр хүрэх зайд
-  байвал зөвхөн түүн рүү чиглэнэ. Бүсийн (area) ур чадвар чөлөөтэй.
+* Taunt-д орсон дайсны НЭГ БАЙТАЙ ур чадвар (damage, drain, curse) Taunt хийсэн дүр хүрэх
+  зайд байвал зөвхөн түүн рүү чиглэнэ. Бүсийн (area) ур чадвар чөлөөтэй.
+
+Dungeon (2026-11-09)
+--------------------
+* Хохирол / эдгээлт / бамбайн хэмжээ = skill.power × unit.power_mult (level, item, давхрын хүч).
+* drain — хохирол учруулаад, учруулсан хохирлын skill.drain хувиар өөрийгөө эдгээнэ.
+* summon — skill.summons төрлийн үхсэн дагуулыг хажууд нь сэргээнэ (амьд нь MAX_SUMMONS хүртэл).
+* Ялалт: босс (UnitType.boss) байгаа бол түүнийг унагахад, байхгүй бол бүх дайсныг унагахад.
+* state.obstacles — байнгын саад, хөдөлгөөн болон мөсөн ханыг хаана.
 """
 
 from __future__ import annotations
 
 from collections import deque
 
-from .constants import BOARD_H, BOARD_W, DEMONS, HEROES, MAX_IMPS, MAX_ROUNDS, SKILLS
+from .constants import BOARD_H, BOARD_W, DEMONS, HEROES, MAX_ROUNDS, MAX_SUMMONS, SKILLS
 from .state import END_TURN, Action, GameState, Unit
 
 NEIGHBORS = ((1, 0), (-1, 0), (0, 1), (0, -1))
@@ -42,6 +50,11 @@ def area_cells(center):
     cx, cy = center
     return [(cx + dx, cy + dy) for dx in (-1, 0, 1) for dy in (-1, 0, 1)
             if GameState.in_bounds((cx + dx, cy + dy))]
+
+
+def scaled_power(unit: Unit, sk) -> int:
+    """Ур чадварын бодит хэмжээ: skill.power × unit.power_mult (бүхэл тоо)."""
+    return max(0, int(round(sk.power * unit.power_mult)))
 
 
 def wall_cells(target, variant):
@@ -108,7 +121,7 @@ def skill_options(state: GameState, unit: Unit, src, blocked_after):
             continue
         sk = SKILLS[sid]
         k = sk.kind
-        if k in ("damage", "curse"):
+        if k in ("damage", "drain", "curse"):
             in_range = [e for e in enemies if dist(src, e.pos) <= sk.range]
             if taunter is not None and taunter in in_range:
                 in_range = [taunter]
@@ -142,12 +155,13 @@ def skill_options(state: GameState, unit: Unit, src, blocked_after):
         elif k == "shield":
             for a in allies:
                 p = src if a is unit else a.pos
-                if dist(src, p) <= sk.range and a.shield < sk.power:
+                if dist(src, p) <= sk.range and a.shield < scaled_power(unit, sk):
                     out.append((sid, p, a.uid, 0))
         elif k == "summon":
-            dead = [u for u in state.units.values() if u.kind == "imp" and not u.alive]
-            alive_imps = sum(1 for u in allies if u.kind == "imp")
-            if dead and alive_imps < MAX_IMPS and _free_neighbors(src, blocked_after):
+            kind = sk.summons or "imp"
+            dead = [u for u in state.units.values() if u.kind == kind and not u.alive]
+            alive_n = sum(1 for u in allies if u.kind == kind)
+            if dead and alive_n < MAX_SUMMONS and _free_neighbors(src, blocked_after):
                 out.append((sid, None, None, 0))
     return out
 
@@ -245,13 +259,20 @@ def _use_skill(state: GameState, u: Unit, a: Action, events: list):
     events.append({"type": "skill", "unit": u.uid, "skill": a.skill, "target": a.target,
                    "target_uid": a.target_uid})
     k = sk.kind
+    power = scaled_power(u, sk)
     if k == "damage":
-        _deal(state, u, state.units[a.target_uid], sk.power, events)
+        _deal(state, u, state.units[a.target_uid], power, events)
+    elif k == "drain":
+        dealt = _deal(state, u, state.units[a.target_uid], power, events)
+        amount = 0 if u.cursed else min(int(round(dealt * sk.drain)), u.max_hp - u.hp)
+        if amount > 0:
+            u.hp += amount
+            events.append({"type": "heal", "src": u.uid, "dst": u.uid, "amount": amount})
     elif k == "area_damage":
         cells = set(area_cells(a.target))
         for e in state.alive_units(other_side(u.side)):
             if e.pos in cells:
-                _deal(state, u, e, sk.power, events)
+                _deal(state, u, e, power, events)
     elif k == "curse":
         t = state.units[a.target_uid]
         t.cursed = sk.duration
@@ -270,33 +291,38 @@ def _use_skill(state: GameState, u: Unit, a: Action, events: list):
         events.append({"type": "wall", "src": u.uid, "cells": cells, "turns": sk.duration})
     elif k == "heal":
         t = state.units[a.target_uid]
-        amount = min(sk.power, t.max_hp - t.hp)
+        amount = min(power, t.max_hp - t.hp)
         t.hp += amount
         events.append({"type": "heal", "src": u.uid, "dst": t.uid, "amount": amount})
     elif k == "shield":
         t = state.units[a.target_uid]
-        t.shield = sk.power
-        events.append({"type": "shield", "src": u.uid, "dst": t.uid, "amount": sk.power})
+        t.shield = power
+        events.append({"type": "shield", "src": u.uid, "dst": t.uid, "amount": power})
     elif k == "summon":
+        kind = sk.summons or "imp"
         blocked = state.blocked_cells()
         free = _free_neighbors(u.pos, blocked)
-        alive_imps = sum(1 for x in state.alive_units(u.side) if x.kind == "imp")
+        alive_n = sum(1 for x in state.alive_units(u.side) if x.kind == kind)
         spawned = []
-        for imp in (x for x in state.units.values() if x.kind == "imp" and not x.alive):
-            if not free or alive_imps >= MAX_IMPS:
+        for dead in [x for x in state.units.values() if x.kind == kind and not x.alive]:
+            if not free or alive_n >= MAX_SUMMONS:
                 break
-            fresh = Unit(imp.uid, "imp", free.pop(0))
+            fresh = Unit(dead.uid, kind, free.pop(0))
+            fresh.max_hp = fresh.hp = dead.max_hp          # давхрын хүчийг хадгална
+            fresh.power_mult, fresh.level = dead.power_mult, dead.level
             fresh.acted = True  # дуудагдсан ээлждээ нүүхгүй
-            state.units[imp.uid] = fresh
-            alive_imps += 1
-            spawned.append({"unit": imp.uid, "pos": fresh.pos})
+            state.units[dead.uid] = fresh
+            alive_n += 1
+            spawned.append({"unit": dead.uid, "pos": fresh.pos})
         events.append({"type": "summon", "src": u.uid, "spawned": spawned})
 
 
-def _deal(state: GameState, src: Unit, dst: Unit, amount: int, events: list):
+def _deal(state: GameState, src: Unit, dst: Unit, amount: int, events: list) -> int:
+    """Хохирол учруулна. HP-ээс бодитоор хасагдсан хэмжээг буцаана (drain-д)."""
     absorbed = min(dst.shield, amount)
     dst.shield -= absorbed
     dmg = amount - absorbed
+    lost = min(dst.hp, dmg)
     dst.hp = max(0, dst.hp - dmg)
     events.append({"type": "damage", "src": src.uid, "dst": dst.uid, "amount": dmg,
                    "absorbed": absorbed, "hp": dst.hp})
@@ -305,12 +331,14 @@ def _deal(state: GameState, src: Unit, dst: Unit, amount: int, events: list):
         dst.shield = 0
         dst.taunted_by, dst.taunt_turns, dst.cursed = None, 0, 0
         events.append({"type": "death", "unit": dst.uid})
+    return lost
 
 
 def _check_winner(state: GameState, events: list):
     if state.winner:
         return
-    if not state.boss.alive:
+    boss = state.boss
+    if (boss is not None and not boss.alive) or (boss is None and not state.alive_units(DEMONS)):
         state.winner = HEROES
     elif not state.alive_units(HEROES):
         state.winner = DEMONS
