@@ -15,7 +15,8 @@ from .runner import (BALANCE_VARIANTS, BOT_NAMES, balance_sweep, make_boss_facto
 def main(argv=None) -> int:
     p = argparse.ArgumentParser(prog="python -m experiments")
     p.add_argument("--games", type=int, default=100, help="туршилт бүрийн тулааны тоо")
-    p.add_argument("--boss", choices=("eval", "mcts", "placeholder"), default="eval")
+    p.add_argument("--boss", choices=("eval", "lookahead", "mcts", "placeholder"), default="eval",
+                   help="боссын горим (lookahead — ai/-ийн default, PR #12-оос хойш)")
     p.add_argument("--mcts-iters", type=int, default=400,
                    help="mcts горимд шийдвэр бүрийн давталт (хугацааны оронд — давтагдахуйц)")
     p.add_argument("--train-games", type=int, default=5, help="профайл гаргах bot бүрийн тулаан")

@@ -2,7 +2,7 @@
 
 Өгөгдөл нь `decision.to_panel()` (ai/):
     {"habits": [...], "options": [{"label", "score", "chosen"}, ...], "enraged": bool,
-     "random_pick": bool, "ms": int, "mode": "mcts" | "eval", "iterations": int}
+     "random_pick": bool, "ms": int, "mode": "lookahead" | "mcts" | "eval", "iterations": int}
 Түр босс (`PlaceholderBoss`) None буцаадаг — тэр үед тайлбар харуулна.
 """
 
@@ -13,7 +13,9 @@ from . import theme as T
 
 X0 = L.BOSS_PANEL_X + 14
 INNER_W = L.BOSS_PANEL_W - 28
-MODE_NAMES = {"mcts": "MCTS", "eval": "Үнэлгээ", "tactic": "Тактик"}
+MODE_NAMES = {"lookahead": "Lookahead", "mcts": "MCTS", "eval": "Үнэлгээ", "tactic": "Тактик"}
+# "iterations"-ийн нэгж: MCTS-д симуляци, lookahead-д тоглогчийн хариуг тооцсон төлөвлөгөө
+ITERATION_UNITS = {"lookahead": "төлөвлөгөө"}
 BOSS_RED = (225, 70, 80)
 
 
@@ -40,7 +42,8 @@ class BossPanel:
             took = f"{ms} мс" if ms < 1000 else f"{ms / 1000:.1f} сек"
             meta = f"{MODE_NAMES.get(panel.get('mode'), panel.get('mode'))} · {took}"
             if panel.get("iterations"):
-                meta += f" · {panel['iterations']} симуляци"
+                unit = ITERATION_UNITS.get(panel.get("mode"), "симуляци")
+                meta += f" · {panel['iterations']} {unit}"
             self.text.draw(surf, meta, (X0, y), 16, T.TEXT_DIM)
         y += 26
 

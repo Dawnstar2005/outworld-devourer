@@ -58,15 +58,17 @@ BOSS_STEP_DELAY = 0.5      # боссын нүүдэл хооронд (сек), 
 RESULT_DELAY = 1.6         # тоглолт дууссаны дараа үр дүнгийн дэлгэц гарах хүртэл (сек)
 LOG_LINES = 14
 SPRITE_SIZE = 48           # 16px sprite × 3 (pixel art бүхэл тоогоор томруулна)
-BOSS_MODES = ("eval", "mcts")
-BOSS_MODE_LABELS = {"eval": "хурдан (үнэлгээ)", "mcts": "ухаалаг (MCTS)"}
+BOSS_MODES = ("lookahead", "eval", "mcts")
+BOSS_MODE_LABELS = {"lookahead": "ухаалаг (lookahead)", "eval": "хурдан (үнэлгээ)",
+                    "mcts": "MCTS (туршилтын)"}
+DEFAULT_BOSS_MODE = "lookahead"   # ai/-ийн default-тай ижил: хамгийн хүчтэй, ~50 мс
 
 
 class App:
     def __init__(self, session: Optional[GameSession] = None, boss=None, fps: int = FPS,
                  boss_step_delay: Optional[float] = None,
                  boss_factory: Optional[Callable[[str], object]] = None,
-                 boss_mode: str = "eval", start_screen: str = "menu",
+                 boss_mode: str = DEFAULT_BOSS_MODE, start_screen: str = "menu",
                  show_boss_panel: Optional[bool] = None, sound: bool = True, logger=None,
                  campaign: Optional[Campaign] = None,
                  enemy_factory: Optional[Callable[[], object]] = None,
@@ -164,7 +166,7 @@ class App:
                          hint="Гурван баатар эсрэг тоглогчоос суралцдаг Demon Lord"),
                 MenuItem("boss_mode", f"Босс: {BOSS_MODE_LABELS[self.boss_mode]}",
                          enabled=self._boss_mode_selectable(),
-                         hint="Demon Lord-ийн AI: хурдан үнэлгээ эсвэл гүн MCTS (≤ 2 сек)"),
+                         hint="Demon Lord-ийн AI: таны хариуг тооцдог lookahead, үнэлгээ, MCTS"),
                 MenuItem("options", "Тохиргоо",
                          hint="Дууны түвшин, дайсны хурд, бүтэн дэлгэц"),
                 MenuItem("help", "Удирдлага", hint="Товчлуур, хулганы удирдлага"),
@@ -863,7 +865,7 @@ def main(argv=None) -> int:
     p = argparse.ArgumentParser(prog="python -m game", description="Outworld Devourer")
     p.add_argument("--fps", type=int, default=FPS)
     p.add_argument("--seed", type=int, default=None, help="боссын санамсаргүй сонголтын seed")
-    p.add_argument("--boss-mode", choices=BOSS_MODES, default="eval",
+    p.add_argument("--boss-mode", choices=BOSS_MODES, default=DEFAULT_BOSS_MODE,
                    help="боссын AI-ийн горим (ai/ суусан үед)")
     p.add_argument("--placeholder-boss", action="store_true",
                    help="ai/ байсан ч түр боссыг ашиглах")

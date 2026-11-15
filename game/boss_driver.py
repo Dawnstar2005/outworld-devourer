@@ -71,14 +71,30 @@ def ai_available() -> bool:
         return False
 
 
-def make_boss(mode: str = "eval", profile: Optional[dict] = None, seed: Optional[int] = None):
-    """`ai.BossAI` байвал түүнийг, үгүй бол PlaceholderBoss буцаана."""
+def lookahead_available() -> bool:
+    """Суусан `ai/` lookahead горимтой эсэх (ai/opponent.py — PR #12-оос хойш)."""
+    import importlib.util
+    try:
+        return importlib.util.find_spec("ai.opponent") is not None
+    except (ImportError, ValueError):
+        return False
+
+
+def make_boss(mode: str = "lookahead", profile: Optional[dict] = None,
+              seed: Optional[int] = None):
+    """`ai.BossAI` байвал түүнийг, үгүй бол PlaceholderBoss буцаана.
+
+    mode="lookahead" (default) — хуучин `ai/` (lookahead-гүй) суусан бол "eval" болгоно:
+    тэр хувилбар танихгүй горимыг чимээгүй eval шиг тоглодог тул log-ийн meta үнэн байна.
+    """
     try:
         from ai import BossAI
     except ModuleNotFoundError as e:
         if e.name != "ai":
             raise
         return PlaceholderBoss(seed=seed)
+    if mode == "lookahead" and not lookahead_available():
+        mode = "eval"
     return BossAI(profile=profile, mode=mode, seed=seed)
 
 
