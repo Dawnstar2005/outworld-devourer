@@ -45,6 +45,7 @@ from .labels import event_text
 from .menu import Menu, MenuItem
 from .music import MusicPlayer
 from .options import OptionsMenu
+from .prediction import LearnedModels, PredictionTracker
 from .screens import INTRO_DURATION, Screens
 from .session import GameSession
 from .settings import Settings
@@ -72,7 +73,8 @@ class App:
                  show_boss_panel: Optional[bool] = None, sound: bool = True, logger=None,
                  campaign: Optional[Campaign] = None,
                  enemy_factory: Optional[Callable[[], object]] = None,
-                 settings: Optional[Settings] = None):
+                 settings: Optional[Settings] = None,
+                 learned: Optional[LearnedModels] = None):
         pygame.mixer.pre_init(44100, -16, 2, 512)   # дууны саатлыг багасгана
         pygame.init()
         pygame.display.set_caption("Outworld Devourer")
@@ -107,6 +109,9 @@ class App:
         self.selection = Selection(self.session, side=self.session.human_side)
         self.stats = MatchStats()
         self.session.add_hook(self.stats.on_action)
+        self.learned = learned            # log-оос сургасан таамаглагч (арын thread)
+        self.tracker: Optional[PredictionTracker] = None
+        self.session.add_hook(self._track_prediction)
         self.logger = logger              # learning.GameLogger — тоглолтын log (DQ)
         if logger is not None:
             self.session.add_hook(logger.on_action)
@@ -210,7 +215,17 @@ class App:
             if line:
                 self.log.append(line)
         self.selection.refresh()
+        if self.tracker is not None:
+            self.tracker.refresh(self.state)
         return events
+
+    def _track_prediction(self, before, action, events) -> None:
+        if self.tracker is not None:
+            self.tracker.on_action(before, action, events)
+
+    @property
+    def predictor(self):
+        return self.learned.predictor if self.learned is not None else None
 
     def start_game(self) -> None:
         """Хурдан тулаан: анхны Demon Lord-ийн тулаан (цэснээс, түр зогсолтоос, үр дүнгээс)."""
@@ -235,6 +250,10 @@ class App:
         self.session.reset(state)
         self.pause_menu.items = self._pause_items()
         self.reward = None
+        pred = self.predictor
+        self.tracker = PredictionTracker(pred, self.session.human_side) if pred is not None else None
+        if self.tracker is not None:
+            self.tracker.refresh(self.state)
         if self.logger is not None:
             self.logger.start(self.state, meta=self._log_meta())
         self.stats.reset()
@@ -288,6 +307,8 @@ class App:
         self.screen_name = "dungeon"
 
     def _leave_battle(self) -> None:
+        if self.learned is not None:
+            self.learned.refresh()            # шинэ log-оор таамаглагчийг арын thread-д сургана
         if self.logger is not None:
             self.logger.close("menu")
         self.boss.cancel()
@@ -543,6 +564,8 @@ class App:
 
     # ---- шагналын дэлгэц ----
     def _finish_stage(self) -> None:
+        if self.learned is not None:
+            self.learned.refresh()
         """Тулаан дууссаны дараа XP, олзыг тооцож хадгалаад шагналын дэлгэц рүү шилжинэ."""
         won = self.state.winner == HEROES
         self.reward = self.campaign.finish_stage(self.stage_key, won, self.state.round)
@@ -763,6 +786,8 @@ class App:
                     self._finish_stage()
                 else:
                     self.screen_name = "result"
+                    if self.learned is not None:
+                        self.learned.refresh()
                     self.result_menu.index = 0
 
     def step(self, dt: float) -> None:
@@ -821,7 +846,8 @@ class App:
                                  thinking=self.boss_phase == "thinking",
                                  elapsed=self.boss.elapsed, enraged_now=self.state.boss_enraged,
                                  decision_round=self.boss_panel_round,
-                                 ai_connected=self.ai_connected)
+                                 ai_connected=self.ai_connected,
+                                 prediction=self.tracker.panel() if self.tracker else None)
         if self.state.is_over and not self.anim.busy:
             self.hud.draw_game_over(self.screen, self.state)
         if self.paused and overlay:
@@ -881,16 +907,21 @@ def main(argv=None) -> int:
     args = p.parse_args(argv)
 
     boss = PlaceholderBoss(seed=args.seed) if args.placeholder_boss else None
+    learned = None if args.profile == "none" else LearnedModels(args.log_dir)
+    if learned is not None:
+        learned.refresh()                 # эхлэхэд log-оос сургаж эхэлнэ (тоглоомыг саатуулахгүй)
     logger = None
     if not args.no_log:
         from learning import GameLogger
         logger = GameLogger(args.log_dir, human_side=HEROES)
     app = App(GameSession(human_side=HEROES), boss=boss, fps=args.fps, logger=logger,
+              # Таамаглагчийг босст ӨГӨХГҮЙ: lookahead + PredictorHeroModel туршилтаар боссыг
+              # сулруулсан (5 bot × 30: 62.0% → сургасан 45.3%). Самбарт л харуулна.
               boss_factory=lambda mode: make_boss(mode=mode, seed=args.seed,
                                                   profile=current_profile(args)),
               campaign=Campaign.load(args.save) if args.save else None,
               enemy_factory=lambda: TacticalAI(profile=current_profile(args), seed=args.seed),
-              boss_mode=args.boss_mode,
+              boss_mode=args.boss_mode, learned=learned,
               start_screen="game" if args.skip_menu else ("menu" if args.skip_intro else "intro"))
     app.run(max_frames=args.frames)
     return 0
