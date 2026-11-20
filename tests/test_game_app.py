@@ -325,11 +325,18 @@ def test_boss_mode_toggle_creates_boss_with_mode(monkeypatch):
     assert app.main_menu.items[2].enabled
     key(app, pygame.K_DOWN)
     key(app, pygame.K_DOWN)
-    key(app, pygame.K_RETURN)                         # «Босс: ...» → mcts
+    assert app.boss_mode == "lookahead" and "lookahead" in app.main_menu.items[2].label
+    key(app, pygame.K_RETURN)                         # «Босс: ...» → eval
+    assert app.boss_mode == "eval" and "үнэлгээ" in app.main_menu.items[2].label
+    key(app, pygame.K_RETURN)                         # → mcts
     assert app.boss_mode == "mcts" and "MCTS" in app.main_menu.items[2].label
     app.main_menu.index = 1                           # «Хурдан тулаан»
     key(app, pygame.K_RETURN)
-    assert modes == ["eval", "mcts"]                  # эхлэхэд + шинэ тоглолтод
+    assert modes == ["lookahead", "mcts"]             # эхлэхэд + шинэ тоглолтод
+    app.go_menu()
+    app.main_menu.index = 2
+    key(app, pygame.K_RETURN)                         # mcts → эргээд lookahead
+    assert app.boss_mode == "lookahead"
     pygame.quit()
 
 

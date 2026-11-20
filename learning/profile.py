@@ -34,8 +34,8 @@ HERO_NAMES = {"knight": "Knight", "mage": "Mage", "healer": "Healer"}
 
 try:   # ai/ main-д орсны дараа эх утгыг тэндээс авна
     from ai.evaluate import DEFAULT_PRIORITY
-except ImportError:   # ai/-ийн DEFAULT_PRIORITY-тэй ижил байх ёстой
-    DEFAULT_PRIORITY = {"knight": 1.0, "mage": 1.3, "healer": 1.4}
+except ImportError:   # ai/-ийн DEFAULT_PRIORITY-тэй ижил байх ёстой (PR #12: тэнцүү эрэмбэ)
+    DEFAULT_PRIORITY = {"knight": 1.0, "mage": 1.0, "healer": 1.0}
 
 # ---- шинжилгээний тохиргоо (тоглоомын тоо биш — профайл гаргах дүрэм) ----
 TAUNT_VALUE = 10            # taunt-д орсон дайсан бүрийг 10 HP хамгаалсантай тэнцүүлнэ

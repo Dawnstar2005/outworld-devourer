@@ -22,14 +22,20 @@ BOT_NAMES = tuple(HERO_BOTS)
 
 
 def make_boss_factory(kind: str = "eval", **kw) -> Callable:
-    """(profile, seed) → боссын controller. kind: eval | mcts | placeholder.
+    """(profile, seed) → боссын controller. kind: eval | lookahead | mcts | placeholder.
 
-    eval/mcts нь ai.BossAI шаардана (ai/ main-д ороогүй бол ModuleNotFoundError).
+    eval/lookahead/mcts нь ai.BossAI шаардана (ai/ main-д ороогүй бол ModuleNotFoundError).
+    lookahead-ийг хуучин ai/ (ai/opponent.py-гүй) дээр хүсвэл ValueError — чимээгүй eval болж
+    туршилтын дүнг гажуудуулахаас сэргийлнэ.
     """
     if kind == "placeholder":
         from game.boss_driver import PlaceholderBoss
         return lambda profile, seed: PlaceholderBoss(seed=seed)
     from ai import BossAI
+    if kind == "lookahead":
+        from game.boss_driver import lookahead_available
+        if not lookahead_available():
+            raise ValueError("суусан ai/ lookahead горимгүй (ai/opponent.py алга, PR #12 хэрэгтэй)")
     return lambda profile, seed: BossAI(profile=profile, mode=kind, seed=seed, **kw)
 
 

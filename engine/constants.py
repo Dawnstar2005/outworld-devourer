@@ -176,4 +176,4 @@ BOSS_DROPS = {1: "slime_core", 2: "goblin_crown", 3: "vampire_fang", 4: "legion_
 FLOOR_ENEMY_SCALE = {1: (1.0, 1.0), 2: (1.1, 1.08), 3: (1.16, 1.12), 4: (1.3, 1.22),
                      5: (1.35, 1.2)}
 # Давхрын боссд FLOOR_ENEMY_SCALE дээр нэмж үржих (боссын тулааныг мангасын үеэс тусад нь тааруулна)
-BOSS_EXTRA_SCALE = {5: (1.4, 1.27)}
+BOSS_EXTRA_SCALE = {5: (1.33, 1.24)}   # lookahead боссын эсрэг тааруулсан (Lv7 bot ~40%)
