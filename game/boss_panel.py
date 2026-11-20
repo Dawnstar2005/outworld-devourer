@@ -4,6 +4,9 @@
     {"habits": [...], "options": [{"label", "score", "chosen"}, ...], "enraged": bool,
      "random_pick": bool, "ms": int, "mode": "lookahead" | "mcts" | "eval", "iterations": int}
 Түр босс (`PlaceholderBoss`) None буцаадаг — тэр үед тайлбар харуулна.
+
+Доод хэсэг «Таны дараагийн нүүдэл»: game/prediction.py-ийн `PredictionTracker.panel()` —
+нүүгээгүй баатар бүрийн таамаг, таамаг хэдэн удаа зөв байсан.
 """
 
 import pygame
@@ -17,6 +20,8 @@ MODE_NAMES = {"lookahead": "Lookahead", "mcts": "MCTS", "eval": "Үнэлгээ"
 # "iterations"-ийн нэгж: MCTS-д симуляци, lookahead-д тоглогчийн хариуг тооцсон төлөвлөгөө
 ITERATION_UNITS = {"lookahead": "төлөвлөгөө"}
 BOSS_RED = (225, 70, 80)
+PRED_BLUE = (120, 180, 255)
+PRED_H = 30 + 3 * 20 + 22 + 20      # таамгийн хэсгийн өндөр (гарчиг, 3 мөр, оноо, сүүлийн)
 
 
 class BossPanel:
@@ -24,7 +29,7 @@ class BossPanel:
         self.text = text
 
     def draw(self, surf, panel, *, thinking: bool, elapsed: float, enraged_now: bool,
-             decision_round, ai_connected: bool):
+             decision_round, ai_connected: bool, prediction: dict = None):
         pygame.draw.rect(surf, T.PANEL_BG, (L.BOSS_PANEL_X, L.PANEL_Y, L.BOSS_PANEL_W, L.PANEL_H),
                          border_radius=8)
         pygame.draw.rect(surf, (90, 40, 50), (L.BOSS_PANEL_X, L.PANEL_Y, L.BOSS_PANEL_W, 4),
@@ -55,6 +60,11 @@ class BossPanel:
                            bold=True, anchor="center")
             y += 40
 
+        bottom = L.PANEL_Y + L.PANEL_H - 12
+        if prediction is not None:
+            bottom -= PRED_H
+            self._prediction(surf, prediction, bottom + 6)
+
         if not ai_connected:
             y = self._section(surf, "AI холбогдоогүй", y)
             msg = ("Одоо түр босс ажиллаж байна. Боссын AI (ai/) main-д орсны дараа "
@@ -84,14 +94,59 @@ class BossPanel:
             self.text.draw(surf, "Босс хараахан шийдвэр гаргаагүй", (X0, y), 17, T.TEXT_DIM)
             return
         for i, opt in enumerate(options[:3]):
+            if y + 50 > bottom:                          # таамгийн хэсэгт багтахгүй бол
+                break
             y = self._option(surf, i, opt, y, dim=thinking,
                              random_pick=bool(panel.get("random_pick")))
+        if prediction is not None:
+            return
         note = ("Оноо (0–1): тухайн нүүдлийн дараах байдлыг босс хэр ашигтай гэж үнэлсэн. "
                 "Заримдаа санамсаргүй сонгож, тоглогчид урьдчилан таамаглахад хэцүү болгоно.")
         y = max(y + 6, L.PANEL_Y + L.PANEL_H - 12 - 18 * 4)
         for line in self.text.wrap(note, 15, INNER_W)[:4]:
             self.text.draw(surf, line, (X0, y), 15, T.TEXT_DIM)
             y += 18
+
+    def _fit(self, text, size, width):
+        if self.text.render(text, size).get_width() <= width:
+            return text
+        while text and self.text.render(text + "…", size).get_width() > width:
+            text = text[:-1]
+        return text + "…"
+
+    def _prediction(self, surf, pred, y):
+        """«Таны дараагийн нүүдэл»: баатар бүрийн таамаг, хэдэн удаа зөв таасан."""
+        self.text.draw(surf, "Таны дараагийн нүүдэл (таамаг)", (X0, y), 18, PRED_BLUE, bold=True)
+        pygame.draw.line(surf, T.PANEL_LINE, (X0, y + 22), (X0 + INNER_W, y + 22))
+        y += 30
+        guesses = pred.get("guesses") or []
+        if not guesses:
+            self.text.draw(surf, "Таны ээлжинд гарна", (X0, y), 16, T.TEXT_DIM)
+        from .labels import unit_name
+        for uid, label, p in guesses[:3]:
+            name = unit_name(uid)
+            self.text.draw(surf, name, (X0, y), 16, T.ACCENT, bold=True)
+            pct = self.text.render(f"{round(p * 100)}%", 16, PRED_BLUE, bold=True)
+            surf.blit(pct, pct.get_rect(topright=(X0 + INNER_W, y)))
+            lx = X0 + 64
+            self.text.draw(surf, self._fit(label, 16, X0 + INNER_W - pct.get_width() - 8 - lx),
+                           (lx, y), 16, T.TEXT)
+            y += 20
+        y += 4
+        total = pred.get("total", 0)
+        if total:
+            hits, hits3 = pred.get("hits", 0), pred.get("hits3", 0)
+            msg = f"Зөв таасан: {hits}/{total} ({round(100 * hits / total)}%) · top-3: {hits3}/{total}"
+        else:
+            msg = "Зөв таасан: — (нүүдэл хийгээгүй)"
+        self.text.draw(surf, self._fit(msg, 15, INNER_W), (X0, y), 15, T.TEXT_DIM)
+        last = pred.get("last")
+        if last:
+            uid, guess, actual, hit = last
+            mark = "Зөв" if hit else "Буруу"
+            text = f"{mark} — {unit_name(uid)}: {actual}" + ("" if hit else f" (таамаг: {guess})")
+            self.text.draw(surf, self._fit(text, 15, INNER_W), (X0, y + 20), 15,
+                           T.HP_HERO if hit else (230, 150, 120))
 
     def _section(self, surf, title, y):
         self.text.draw(surf, title, (X0, y), 18, T.TEXT_DIM, bold=True)

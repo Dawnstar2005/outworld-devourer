@@ -81,11 +81,13 @@ def lookahead_available() -> bool:
 
 
 def make_boss(mode: str = "lookahead", profile: Optional[dict] = None,
-              seed: Optional[int] = None):
+              seed: Optional[int] = None, predictor=None):
     """`ai.BossAI` байвал түүнийг, үгүй бол PlaceholderBoss буцаана.
 
     mode="lookahead" (default) — хуучин `ai/` (lookahead-гүй) суусан бол "eval" болгоно:
     тэр хувилбар танихгүй горимыг чимээгүй eval шиг тоглодог тул log-ийн meta үнэн байна.
+    predictor — learning.predictor.MovePredictor: lookahead/mcts нь тоглогчийн хариуг
+    түүний өөрийн хэв маягаар тооцоолно (None бол шунахай загвар).
     """
     try:
         from ai import BossAI
@@ -95,7 +97,7 @@ def make_boss(mode: str = "lookahead", profile: Optional[dict] = None,
         return PlaceholderBoss(seed=seed)
     if mode == "lookahead" and not lookahead_available():
         mode = "eval"
-    return BossAI(profile=profile, mode=mode, seed=seed)
+    return BossAI(profile=profile, mode=mode, seed=seed, predictor=predictor)
 
 
 class BossDriver:
